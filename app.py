@@ -41,6 +41,22 @@ if "tests" not in st.session_state:
         {"Athlète": "Hugo Dupont", "Test": "Saut horizontal", "Date": "2026-09-15", "Résultat": "2.31 m", "Précédent": "2.25 m"},
     ])
 
+if "personal_calendar" not in st.session_state:
+    st.session_state.personal_calendar = pd.DataFrame([
+        {"Athlète": "Lucas Martin", "Date": "2026-10-04", "Type": "Compétition", "Intitulé": "Tournoi National U17", "Objectif": "Évaluation"},
+        {"Athlète": "Lucas Martin", "Date": "2026-10-25", "Type": "Stage", "Intitulé": "Stage National U17", "Objectif": "Technique + opposition"},
+        {"Athlète": "Lucas Martin", "Date": "2026-11-12", "Type": "Test", "Intitulé": "Tests physiques", "Objectif": "Évaluation"},
+    ])
+
+if "weight_log" not in st.session_state:
+    st.session_state.weight_log = pd.DataFrame([
+        {"Athlète": "Lucas Martin", "Date": "2026-09-01", "Poids": 70.8},
+        {"Athlète": "Lucas Martin", "Date": "2026-09-15", "Poids": 70.4},
+        {"Athlète": "Lucas Martin", "Date": "2026-10-01", "Poids": 69.9},
+        {"Athlète": "Hugo Dupont", "Date": "2026-09-01", "Poids": 65.4},
+        {"Athlète": "Hugo Dupont", "Date": "2026-10-01", "Poids": 65.0},
+    ])
+
 if "athletes" not in st.session_state:
     st.session_state.athletes = pd.DataFrame([
         {"Nom": "Lucas Martin", "Collectif": "U17", "Style": "Libre", "Catégorie": "71 kg", "Club": "Club Démo"},
@@ -74,7 +90,7 @@ profil = st.sidebar.selectbox(
 pages = {
     "Lutteur / Lutteuse": [
         "🏠 Mon tableau de bord", "📅 Mon calendrier", "🏆 Mes compétitions",
-        "🏕️ Mes stages", "🏋️ Ma préparation physique", "🧪 Mes tests"
+        "🏕️ Mes stages", "🏋️ Ma préparation physique", "⚖️ Mon poids", "🧪 Mes tests"
     ],
     "Entraîneur / Club": [
         "🏠 Tableau de bord club", "👥 Mes athlètes", "🏆 Compétitions",
@@ -165,14 +181,76 @@ if profil == "Lutteur / Lutteuse":
 
     elif page == "📅 Mon calendrier":
         st.title("📅 Mon calendrier")
-        st.dataframe(st.session_state.planning.sort_values("Date"), use_container_width=True, hide_index=True)
+        st.caption("Tu peux ajouter tes propres compétitions, stages et autres échéances.")
+
+        mine = st.session_state.personal_calendar[
+            st.session_state.personal_calendar["Athlète"] == athlete
+        ].sort_values("Date")
+        st.dataframe(mine, use_container_width=True, hide_index=True)
+
+        with st.form("personal_calendar_form"):
+            st.subheader("➕ Ajouter une échéance")
+            d = st.date_input("Date", date.today())
+            typ = st.selectbox("Type", ["Compétition", "Stage", "Entraînement", "Préparation physique", "Test", "Récupération"])
+            title = st.text_input("Intitulé")
+            objective = st.text_input("Objectif", "")
+            submitted = st.form_submit_button("Ajouter à mon calendrier")
+        if submitted:
+            row = pd.DataFrame([{
+                "Athlète": athlete, "Date": str(d), "Type": typ,
+                "Intitulé": title, "Objectif": objective
+            }])
+            st.session_state.personal_calendar = pd.concat(
+                [st.session_state.personal_calendar, row], ignore_index=True
+            )
+            st.success("Échéance ajoutée à ton calendrier.")
 
     elif page == "🏆 Mes compétitions":
         st.title("🏆 Mes compétitions")
         hist = st.session_state.competitions[st.session_state.competitions["Athlète"] == athlete]
         st.dataframe(hist.sort_values("Date", ascending=False), use_container_width=True, hide_index=True)
+
         st.divider()
-        add_competition()
+        st.subheader("📝 Bilan rapide de compétition")
+        st.caption("Le bilan est volontairement simple : quelques chiffres et un court commentaire.")
+
+        with st.form("quick_competition_bilan"):
+            c1, c2 = st.columns(2)
+            with c1:
+                d = st.date_input("Date de compétition", date.today())
+                name = st.text_input("Compétition", "")
+                category = st.text_input("Catégorie", athlete_data["Catégorie"])
+            with c2:
+                matches = st.number_input("Nombre de matchs", min_value=0, step=1, value=1)
+                wins = st.number_input("Victoires", min_value=0, step=1, value=0)
+                losses = st.number_input("Défaites", min_value=0, step=1, value=0)
+
+            result = st.text_input("Résultat / classement", "Ex. 2e, 1/4 finale, vainqueur…")
+            feeling = st.select_slider("Bilan de la compétition", options=["Difficile", "Moyen", "Bien", "Très bien"], value="Bien")
+            comment = st.text_area("Petit bilan", placeholder="2 ou 3 phrases : ce qui a bien fonctionné, ce qui est à améliorer…")
+            submitted = st.form_submit_button("💾 Enregistrer le bilan")
+
+        if submitted:
+            row = pd.DataFrame([{
+                "Date": str(d), "Athlète": athlete, "Compétition": name,
+                "Catégorie": category, "Style": athlete_data["Style"],
+                "Résultat": result, "Victoires": int(wins), "Défaites": int(losses),
+                "Matchs": int(matches), "Bilan": feeling, "Commentaire": comment
+            }])
+            st.session_state.competitions = pd.concat(
+                [st.session_state.competitions, row], ignore_index=True
+            )
+            st.success("Bilan de compétition enregistré.")
+
+        st.subheader("📌 Résumé")
+        if len(hist):
+            last = hist.sort_values("Date", ascending=False).iloc[0]
+            total = int(last.get("Victoires", 0)) + int(last.get("Défaites", 0))
+            st.metric("Dernier résultat", last["Résultat"])
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Matchs", total)
+            c2.metric("Victoires", int(last["Victoires"]))
+            c3.metric("Défaites", int(last["Défaites"]))
 
     elif page == "🏕️ Mes stages":
         st.title("🏕️ Mes stages")
@@ -196,6 +274,27 @@ if profil == "Lutteur / Lutteuse":
             {"Jour": "Vendredi", "Séance": "Spécifique lutte", "Contenu": "Circuit 3×4 min", "RPE cible": 8},
         ])
         st.dataframe(sessions, use_container_width=True, hide_index=True)
+        st.subheader("📈 Évolution des tests physiques")
+        mytests = st.session_state.tests[st.session_state.tests["Athlète"] == athlete].copy()
+        if len(mytests):
+            st.caption("Les tests sont affichés par exercice lorsque les résultats sont numériques.")
+            numeric_tests = []
+            for _, r in mytests.iterrows():
+                try:
+                    value = float(str(r["Résultat"]).replace(",", ".").split()[0])
+                    numeric_tests.append({"Date": pd.to_datetime(r["Date"]), "Test": r["Test"], "Valeur": value})
+                except (ValueError, TypeError):
+                    pass
+            if numeric_tests:
+                nt = pd.DataFrame(numeric_tests)
+                selected_test = st.selectbox("Test à suivre", sorted(nt["Test"].unique()))
+                series = nt[nt["Test"] == selected_test].sort_values("Date").set_index("Date")[["Valeur"]]
+                st.line_chart(series, y="Valeur", height=280)
+            else:
+                st.info("Ajoute des résultats numériques pour afficher une courbe d'évolution.")
+        else:
+            st.info("Aucun test enregistré.")
+
         st.subheader("Retour séance")
         with st.form("training_feedback"):
             session = st.selectbox("Séance", sessions["Séance"].tolist())
@@ -205,6 +304,50 @@ if profil == "Lutteur / Lutteuse":
             submitted = st.form_submit_button("Enregistrer")
         if submitted:
             st.success(f"{session} — RPE {rpe}/10 enregistré.")
+
+    elif page == "⚖️ Mon poids":
+        st.title("⚖️ Suivi du poids")
+        st.caption("Historique personnel du poids. Les données servent au suivi de l'évolution, pas à une recommandation médicale.")
+
+        mine = st.session_state.weight_log[
+            st.session_state.weight_log["Athlète"] == athlete
+        ].copy()
+        mine["Date"] = pd.to_datetime(mine["Date"])
+        mine = mine.sort_values("Date")
+
+        if len(mine):
+            current = float(mine.iloc[-1]["Poids"])
+            first = float(mine.iloc[0]["Poids"])
+            delta = current - first
+            c1, c2 = st.columns(2)
+            c1.metric("Dernier poids", f"{current:.1f} kg")
+            c2.metric("Évolution depuis le premier relevé", f"{delta:+.1f} kg")
+
+            chart = mine.set_index("Date")[["Poids"]]
+            st.line_chart(chart, y="Poids", height=320)
+
+            st.subheader("Ajouter un relevé")
+            with st.form("weight_form"):
+                d = st.date_input("Date", date.today())
+                weight = st.number_input("Poids (kg)", min_value=30.0, max_value=200.0, value=current, step=0.1)
+                submitted = st.form_submit_button("💾 Enregistrer le poids")
+            if submitted:
+                row = pd.DataFrame([{"Athlète": athlete, "Date": str(d), "Poids": float(weight)}])
+                st.session_state.weight_log = pd.concat(
+                    [st.session_state.weight_log, row], ignore_index=True
+                )
+                st.success("Relevé de poids enregistré.")
+                st.rerun()
+        else:
+            st.info("Aucun relevé de poids pour cet athlète.")
+            with st.form("first_weight_form"):
+                d = st.date_input("Date", date.today())
+                weight = st.number_input("Poids (kg)", min_value=30.0, max_value=200.0, value=70.0, step=0.1)
+                submitted = st.form_submit_button("Enregistrer")
+            if submitted:
+                row = pd.DataFrame([{"Athlète": athlete, "Date": str(d), "Poids": float(weight)}])
+                st.session_state.weight_log = pd.concat([st.session_state.weight_log, row], ignore_index=True)
+                st.rerun()
 
     elif page == "🧪 Mes tests":
         st.title("🧪 Mes tests physiques")
