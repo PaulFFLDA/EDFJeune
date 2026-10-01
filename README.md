@@ -8,6 +8,10 @@ Prototype Streamlit pour le suivi des jeunes lutteurs :
 - préparation physique
 - tests physiques
 - tableaux de bord
+- calendrier personnel du lutteur
+- bilan rapide de compétition (matchs, victoires, défaites, résultat, ressenti, commentaire)
+- suivi de progression des tests physiques avec courbes
+- courbe d'évolution du poids
 
 ## Lancer localement
 
