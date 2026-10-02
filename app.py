@@ -1,60 +1,94 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-
 from datetime import date
-from supabase import create_client
 
-
-# =========================================================
-# CONFIG
-# =========================================================
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 st.set_page_config(
     page_title="France Lutte Jeunes",
-    page_icon="🇫🇷",
+    page_icon="🤼",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-
-# =========================================================
-# CSS
-# =========================================================
+# ============================================================
+# STYLE
+# ============================================================
 
 st.markdown(
     """
     <style>
 
+    .main {
+        background-color: #f6f8fb;
+    }
+
     .block-container {
-        padding-top: 2rem;
+        padding-top: 1.5rem;
+        padding-bottom: 3rem;
     }
 
     .hero {
-        padding: 2rem;
-        border-radius: 20px;
-        background: linear-gradient(
-            135deg,
-            #111827,
-            #1f2937
-        );
+        padding: 1.6rem 2rem;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #172033, #263957);
         color: white;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
 
     .hero h1 {
-        margin: 0;
-        font-size: 2.5rem;
+        margin-bottom: 0.3rem;
     }
 
     .hero p {
-        opacity: .75;
+        opacity: 0.85;
+        margin-bottom: 0;
     }
 
-    .card {
-        padding: 1.3rem;
-        border-radius: 18px;
-        border: 1px solid #e5e7eb;
+    .section-card {
         background: white;
+        padding: 1.2rem;
+        border-radius: 16px;
+        border: 1px solid #e6eaf0;
+        margin-bottom: 1rem;
+    }
+
+    .criterion-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 14px;
+        border: 1px solid #e6eaf0;
+        min-height: 130px;
+    }
+
+    .status-green {
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        padding: 0.8rem;
+        border-radius: 12px;
+    }
+
+    .status-orange {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        padding: 0.8rem;
+        border-radius: 12px;
+    }
+
+    .status-blue {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 0.8rem;
+        border-radius: 12px;
+    }
+
+    div[data-testid="stMetric"] {
+        background: white;
+        border: 1px solid #e6eaf0;
+        padding: 1rem;
+        border-radius: 14px;
     }
 
     </style>
@@ -62,1702 +96,748 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ============================================================
+# DONNÉES DE BASE
+# ============================================================
 
-# =========================================================
-# CLIENT SUPABASE
-# =========================================================
+if "athletes" not in st.session_state:
+    st.session_state.athletes = [
+        {
+            "Nom": "Martin",
+            "Prénom": "Lucas",
+            "Club": "Club de Caen",
+            "Style": "Lutte libre",
+            "Catégorie": "U17 - 65 kg",
+            "Catégorie poids": "65 kg",
+            "Date de naissance": "2009-04-12",
+            "Collectif": "France U17",
+            "Entraîneur": "Thomas Dupont",
+            "Objectif": "Championnats d'Europe U17",
+            "Points forts": "Explosivité, lutte debout, rythme",
+            "Axes progression": "Défense au sol, gestion des fins de combat",
+            "Observation": "Très bonne progression depuis le début de saison.",
+        },
+        {
+            "Nom": "Durand",
+            "Prénom": "Hugo",
+            "Club": "Lutte Dijon",
+            "Style": "Lutte libre",
+            "Catégorie": "U20 - 74 kg",
+            "Catégorie poids": "74 kg",
+            "Date de naissance": "2007-08-21",
+            "Collectif": "France U20",
+            "Entraîneur": "Pierre Bernard",
+            "Objectif": "Sélection internationale",
+            "Points forts": "Technique, contrôle, endurance",
+            "Axes progression": "Puissance et attaque première intention",
+            "Observation": "Profil intéressant pour le collectif national.",
+        },
+        {
+            "Nom": "Leroy",
+            "Prénom": "Nathan",
+            "Club": "Lutte Rouen",
+            "Style": "Lutte gréco-romaine",
+            "Catégorie": "U15 - 57 kg",
+            "Catégorie poids": "57 kg",
+            "Date de naissance": "2011-02-17",
+            "Collectif": "France U15",
+            "Entraîneur": "Marc Petit",
+            "Objectif": "Championnat de France",
+            "Points forts": "Mobilité, vitesse",
+            "Axes progression": "Défense et force générale",
+            "Observation": "Jeune lutteur en progression.",
+        },
+    ]
 
-@st.cache_resource
-def get_supabase():
+# ============================================================
+# COMPÉTITIONS
+# ============================================================
 
-    return create_client(
-        st.secrets["SUPABASE_URL"],
-        st.secrets["SUPABASE_KEY"],
+if "competitions" not in st.session_state:
+    st.session_state.competitions = [
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-12",
+            "Compétition": "TNR Paris",
+            "Type": "TNR / Ranking national",
+            "Catégorie": "65 kg",
+            "Combats": 4,
+            "Victoires": 3,
+            "Défaites": 1,
+            "Classement": "2e",
+            "Bilan": "Très bien",
+            "Résumé": "Bonne compétition. Très bon comportement dans les phases debout.",
+            "Opposition": "Opposition nationale importante",
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-20",
+            "Compétition": "Championnat de France",
+            "Type": "Championnat de France",
+            "Catégorie": "65 kg",
+            "Combats": 5,
+            "Victoires": 4,
+            "Défaites": 1,
+            "Classement": "3e",
+            "Bilan": "Très bien",
+            "Résumé": "Bonne maîtrise de la compétition.",
+            "Opposition": "Niveau national",
+        },
+        {
+            "Athlète": "Hugo Durand",
+            "Date": "2026-09-20",
+            "Compétition": "TNR Paris",
+            "Type": "TNR / Ranking national",
+            "Catégorie": "74 kg",
+            "Combats": 5,
+            "Victoires": 3,
+            "Défaites": 2,
+            "Classement": "5e",
+            "Bilan": "Bien",
+            "Résumé": "Bonne intensité mais manque de régularité sur les fins de combat.",
+            "Opposition": "Opposition nationale",
+        },
+    ]
+
+# ============================================================
+# POIDS
+# ============================================================
+
+if "weight_log" not in st.session_state:
+    st.session_state.weight_log = [
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-08-20",
+            "Poids": 66.2,
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-01",
+            "Poids": 65.7,
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-12",
+            "Poids": 65.1,
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-20",
+            "Poids": 65.0,
+        },
+        {
+            "Athlète": "Hugo Durand",
+            "Date": "2026-08-20",
+            "Poids": 75.3,
+        },
+        {
+            "Athlète": "Hugo Durand",
+            "Date": "2026-09-20",
+            "Poids": 74.4,
+        },
+    ]
+
+# ============================================================
+# TESTS PHYSIQUES
+# ============================================================
+
+if "tests" not in st.session_state:
+    st.session_state.tests = [
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-08-20",
+            "Test": "Saut vertical",
+            "Valeur": 48,
+            "Unité": "cm",
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-15",
+            "Test": "Saut vertical",
+            "Valeur": 51,
+            "Unité": "cm",
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-08-20",
+            "Test": "Pompes 1 min",
+            "Valeur": 42,
+            "Unité": "rép.",
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-15",
+            "Test": "Pompes 1 min",
+            "Valeur": 48,
+            "Unité": "rép.",
+        },
+    ]
+
+# ============================================================
+# CALENDRIER
+# ============================================================
+
+if "calendar" not in st.session_state:
+    st.session_state.calendar = [
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-10-05",
+            "Type": "Préparation physique",
+            "Intitulé": "Force / puissance",
+            "Objectif": "Développer l'explosivité",
+        },
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-10-12",
+            "Type": "Stage national",
+            "Intitulé": "Stage national U17",
+            "Objectif": "Préparation internationale",
+        },
+        {
+            "Athlète": "Hugo Durand",
+            "Date": "2026-10-08",
+            "Type": "Compétition",
+            "Intitulé": "Tournoi international",
+            "Objectif": "Évaluation internationale",
+        },
+    ]
+
+# ============================================================
+# ÉVALUATIONS DES RÉFÉRENTS
+# ============================================================
+
+if "evaluations_selection" not in st.session_state:
+    st.session_state.evaluations_selection = [
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-21",
+            "Référent": "Référent U17",
+            "Période": "Après TNR / Championnat de France",
+            "Résultats": "3e au Championnat de France et 2e au TNR.",
+            "Opposition": "Opposition nationale significative.",
+            "Stabilité catégorie": "65 kg sur les principales compétitions.",
+            "Expérience": "Expérience régulière sur les compétitions nationales.",
+            "Progression": "Progression intéressante depuis le début de saison.",
+            "Attitude": "Très bonne attitude.",
+            "Engagement": "Engagement régulier dans les stages.",
+            "Investissement": "Investissement satisfaisant dans le projet.",
+            "Observation": "À suivre sur les prochaines échéances internationales.",
+        }
+    ]
+
+# ============================================================
+# PROJETS DE PERFORMANCE
+# ============================================================
+
+if "projets_performance" not in st.session_state:
+    st.session_state.projets_performance = [
+        {
+            "Athlète": "Lucas Martin",
+            "Date": "2026-09-01",
+            "Objectif principal": "Championnats d'Europe U17",
+            "Objectifs intermédiaires": "Progresser sur la défense au sol et stabiliser la catégorie 65 kg.",
+            "Objectif technique": "Défense et contre-attaque",
+            "Objectif physique": "Développer explosivité et puissance",
+            "Objectif tactique": "Mieux gérer les fins de combat",
+            "Compétitions prioritaires": "TNR + Championnat de France + tournoi international",
+            "Engagement lutteur": "Participation régulière et suivi du travail individuel",
+            "Bilan": "Projet en cours de construction.",
+        }
+    ]
+
+# ============================================================
+# STAGES
+# ============================================================
+
+if "stages" not in st.session_state:
+    st.session_state.stages = [
+        {
+            "Nom": "Stage national U17",
+            "Date début": "2026-10-12",
+            "Date fin": "2026-10-16",
+            "Style": "Lutte libre",
+            "Catégorie âge": "U17",
+            "Lieu": "INSEP",
+            "Objectif": "Préparation internationale",
+        }
+    ]
+
+# ============================================================
+# FONCTIONS
+# ============================================================
+
+def athlete_names():
+    return [
+        f"{a['Prénom']} {a['Nom']}"
+        for a in st.session_state.athletes
+    ]
+
+
+def get_athlete(full_name):
+    for athlete in st.session_state.athletes:
+        if f"{athlete['Prénom']} {athlete['Nom']}" == full_name:
+            return athlete
+
+    return None
+
+
+def stats_for(full_name):
+
+    competitions = [
+        x
+        for x in st.session_state.competitions
+        if x["Athlète"] == full_name
+    ]
+
+    matches = sum(
+        int(x["Combats"])
+        for x in competitions
     )
 
-
-@st.cache_resource
-def get_admin_client():
-
-    return create_client(
-        st.secrets["SUPABASE_URL"],
-        st.secrets["SUPABASE_SERVICE_KEY"],
+    wins = sum(
+        int(x["Victoires"])
+        for x in competitions
     )
 
-
-supabase = get_supabase()
-
-
-# =========================================================
-# SESSION
-# =========================================================
-
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-if "profile" not in st.session_state:
-    st.session_state.profile = None
-
-
-# =========================================================
-# AUTH
-# =========================================================
-
-def load_profile(user_id):
-
-    response = (
-        supabase
-        .table("profiles")
-        .select("*")
-        .eq("id", user_id)
-        .single()
-        .execute()
+    losses = sum(
+        int(x["Défaites"])
+        for x in competitions
     )
 
-    return response.data
+    podiums = 0
+
+    for x in competitions:
+
+        ranking = str(
+            x["Classement"]
+        ).lower()
+
+        if ranking.startswith(
+            ("1", "2", "3")
+        ):
+            podiums += 1
+
+    return {
+        "competitions": len(competitions),
+        "matches": matches,
+        "wins": wins,
+        "losses": losses,
+        "podiums": podiums,
+    }
 
 
-def login():
+def competition_summary(full_name):
+
+    competitions = [
+        x
+        for x in st.session_state.competitions
+        if x["Athlète"] == full_name
+    ]
+
+    if not competitions:
+        return {
+            "tnr": 0,
+            "france": 0,
+            "international": 0,
+        }
+
+    return {
+        "tnr": sum(
+            1 for x in competitions
+            if x["Type"] == "TNR / Ranking national"
+        ),
+        "france": sum(
+            1 for x in competitions
+            if x["Type"] == "Championnat de France"
+        ),
+        "international": sum(
+            1 for x in competitions
+            if x["Type"] == "Tournoi international"
+        ),
+    }
+
+
+def selection_data_for(full_name):
+
+    evaluations = [
+        x
+        for x in st.session_state.evaluations_selection
+        if x["Athlète"] == full_name
+    ]
+
+    projects = [
+        x
+        for x in st.session_state.projets_performance
+        if x["Athlète"] == full_name
+    ]
+
+    competitions = [
+        x
+        for x in st.session_state.competitions
+        if x["Athlète"] == full_name
+    ]
+
+    stages_nationaux = [
+        x
+        for x in st.session_state.calendar
+        if x["Athlète"] == full_name
+        and x["Type"] == "Stage national"
+    ]
+
+    return {
+        "evaluations": evaluations,
+        "projects": projects,
+        "competitions": competitions,
+        "stages_nationaux": stages_nationaux,
+    }
+
+
+# ============================================================
+# FICHE ATHLÈTE
+# ============================================================
+
+def render_athlete_sheet(
+    full_name,
+    editable=False,
+    show_selection=True,
+):
+
+    athlete = get_athlete(full_name)
+
+    if athlete is None:
+        st.error("Lutteur introuvable.")
+        return
+
+    stats = stats_for(full_name)
 
     st.markdown(
-        """
+        f"""
         <div class="hero">
-            <h1>🇫🇷 France Lutte Jeunes</h1>
+            <h1>🤼 {athlete['Prénom']} {athlete['Nom']}</h1>
             <p>
-                Athlete Management System · V5
+                {athlete['Club']} ·
+                {athlete['Style']} ·
+                {athlete['Catégorie']} ·
+                {athlete['Collectif']}
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3 = st.columns(
-        [1, 2, 1]
-    )
-
-    with col2:
-
-        st.subheader("Connexion")
-
-        email = st.text_input(
-            "Email"
-        )
-
-        password = st.text_input(
-            "Mot de passe",
-            type="password",
-        )
-
-        if st.button(
-            "Se connecter",
-            use_container_width=True,
-        ):
-
-            try:
-
-                response = (
-                    supabase
-                    .auth
-                    .sign_in_with_password(
-                        {
-                            "email": email,
-                            "password": password,
-                        }
-                    )
-                )
-
-                profile = load_profile(
-                    response.user.id
-                )
-
-                if not profile["active"]:
-
-                    st.error(
-                        "Compte désactivé."
-                    )
-
-                    return
-
-                st.session_state.user = (
-                    response.user
-                )
-
-                st.session_state.profile = (
-                    profile
-                )
-
-                st.rerun()
-
-            except Exception:
-
-                st.error(
-                    "Email ou mot de passe incorrect."
-                )
-
-
-def logout():
-
-    try:
-        supabase.auth.sign_out()
-    except Exception:
-        pass
-
-    st.session_state.user = None
-    st.session_state.profile = None
-
-    st.rerun()
-
-
-# =========================================================
-# HELPERS
-# =========================================================
-
-def is_manager():
-
-    return (
-        st.session_state.profile
-        and
-        st.session_state.profile["role"]
-        == "manager"
-    )
-
-
-def role_name(role):
-
-    labels = {
-
-        "lutteur":
-            "🤼 Lutteur",
-
-        "entraineur":
-            "🏋️ Entraîneur / Club",
-
-        "selectionneur":
-            "👁️ Sélectionneur / Référent",
-
-        "staff":
-            "🇫🇷 Staff national",
-
-        "manager":
-            "👑 Manager",
-
-    }
-
-    return labels.get(
-        role,
-        role,
-    )
-
-
-def audit(
-    action,
-    object_type=None,
-    object_id=None,
-    details=None,
-):
-
-    try:
-
-        supabase.table(
-            "audit_logs"
-        ).insert(
-            {
-                "user_id":
-                    st.session_state.user.id,
-
-                "action":
-                    action,
-
-                "object_type":
-                    object_type,
-
-                "object_id":
-                    object_id,
-
-                "details":
-                    details or {},
-            }
-        ).execute()
-
-    except Exception:
-        pass
-
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-
-def sidebar():
-
-    profile = st.session_state.profile
-
-    st.sidebar.title(
-        "🇫🇷 France Lutte"
-    )
-
-    st.sidebar.write(
-        f"**{profile['full_name']}**"
-    )
-
-    st.sidebar.caption(
-        role_name(
-            profile["role"]
-        )
-    )
-
-    st.sidebar.divider()
-
-    role = profile["role"]
-
-    if role == "lutteur":
-
-        pages = [
-            "🏠 Accueil",
-            "👤 Ma fiche",
-            "🏆 Mes compétitions",
-            "⚖️ Mon poids",
-            "📈 Mes tests",
-            "📅 Mon calendrier",
-            "🎯 Mon projet",
-            "🇫🇷 Mon suivi EDF",
-        ]
-
-    elif role == "entraineur":
-
-        pages = [
-            "🏠 Tableau de bord",
-            "🤼 Mes athlètes",
-            "🏆 Compétitions",
-            "⚖️ Poids",
-            "📈 Tests",
-            "📅 Calendrier",
-            "🎯 Projets",
-            "🇫🇷 Suivi sélection",
-        ]
-
-    elif role == "selectionneur":
-
-        pages = [
-            "🏠 Mon périmètre",
-            "🤼 Athlètes",
-            "🏆 Compétitions",
-            "🏕️ Stages",
-            "📈 Progression",
-            "🇫🇷 Évaluations",
-            "🎯 Projets",
-        ]
-
-    elif role == "staff":
-
-        pages = [
-            "🏠 Tableau de bord",
-            "🤼 Athlètes",
-            "🏆 Compétitions",
-            "🏕️ Stages",
-            "📈 Tests",
-            "🇫🇷 Suivi EDF",
-        ]
-
-    else:
-
-        pages = [
-            "🏠 Vue globale",
-            "🤼 Athlètes",
-            "👥 Utilisateurs",
-            "🔐 Gestion des accès",
-            "🏆 Compétitions",
-            "🏕️ Stages",
-            "🇫🇷 Sélection EDF",
-            "📊 Statistiques",
-            "📝 Audit",
-        ]
-
-    page = st.sidebar.radio(
-        "Navigation",
-        pages,
-    )
-
-    st.sidebar.divider()
-
-    if st.sidebar.button(
-        "🚪 Déconnexion",
-        use_container_width=True,
-    ):
-
-        logout()
-
-    return page
-
-
-# =========================================================
-# MANAGER DASHBOARD
-# =========================================================
-
-def manager_dashboard():
-
-    st.title(
-        "👑 Vue globale"
-    )
-
-    athletes = (
-        supabase
-        .table("athletes")
-        .select("*")
-        .eq("active", True)
-        .execute()
-        .data
-    )
-
-    users = (
-        supabase
-        .table("profiles")
-        .select("*")
-        .execute()
-        .data
-    )
-
-    competitions = (
-        supabase
-        .table("competitions")
-        .select("*")
-        .execute()
-        .data
-    )
-
-    stages = (
-        supabase
-        .table("stages")
-        .select("*")
-        .execute()
-        .data
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
+    # --------------------------------------------------------
+    # INDICATEURS
+    # --------------------------------------------------------
+
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric(
-        "Athlètes",
-        len(athletes),
+        "Compétitions",
+        stats["competitions"]
     )
 
     c2.metric(
-        "Utilisateurs",
-        len(users),
+        "Combats",
+        stats["matches"]
     )
 
     c3.metric(
-        "Compétitions",
-        len(competitions),
+        "Victoires",
+        stats["wins"]
     )
 
     c4.metric(
-        "Stages",
-        len(stages),
+        "Défaites",
+        stats["losses"]
+    )
+
+    c5.metric(
+        "Podiums",
+        stats["podiums"]
     )
 
     st.divider()
 
-    if athletes:
+    # --------------------------------------------------------
+    # INFORMATIONS
+    # --------------------------------------------------------
 
-        df = pd.DataFrame(
-            athletes
+    st.subheader("👤 Informations générales")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.write(
+            f"**Club :** {athlete['Club']}"
         )
 
-        st.subheader(
-            "Effectif national"
+        st.write(
+            f"**Style :** {athlete['Style']}"
         )
 
-        st.dataframe(
-            df[
-                [
-                    "first_name",
-                    "last_name",
-                    "style",
-                    "age_group",
-                    "weight_class",
-                    "collective",
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True,
+        st.write(
+            f"**Catégorie :** {athlete['Catégorie']}"
         )
 
-
-# =========================================================
-# ATHLETES
-# =========================================================
-
-def athletes_page():
-
-    st.title(
-        "🤼 Athlètes"
-    )
-
-    athletes = (
-        supabase
-        .table("athletes")
-        .select("*")
-        .eq("active", True)
-        .order("last_name")
-        .execute()
-        .data
-    )
-
-    if not athletes:
-
-        st.info(
-            "Aucun athlète accessible."
+        st.write(
+            f"**Date de naissance :** "
+            f"{athlete['Date de naissance']}"
         )
 
-        return
+    with col2:
 
-    df = pd.DataFrame(
-        athletes
-    )
+        st.write(
+            f"**Collectif :** {athlete['Collectif']}"
+        )
+
+        st.write(
+            f"**Entraîneur :** {athlete['Entraîneur']}"
+        )
+
+        st.write(
+            f"**Objectif :** {athlete['Objectif']}"
+        )
+
+    # --------------------------------------------------------
+    # PROFIL SPORTIF
+    # --------------------------------------------------------
+
+    st.subheader("🎯 Profil sportif")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
 
-        styles = [
-            "Tous"
-        ] + sorted(
-            df["style"]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        style = st.selectbox(
-            "Style",
-            styles,
+        st.markdown(
+            '<div class="criterion-card">'
+            '<b>Points forts</b><br><br>'
+            f"{athlete['Points forts']}"
+            "</div>",
+            unsafe_allow_html=True,
         )
 
     with col2:
 
-        ages = [
-            "Tous"
-        ] + sorted(
-            df["age_group"]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-
-        age = st.selectbox(
-            "Catégorie",
-            ages,
+        st.markdown(
+            '<div class="criterion-card">'
+            '<b>Axes de progression</b><br><br>'
+            f"{athlete['Axes progression']}"
+            "</div>",
+            unsafe_allow_html=True,
         )
 
     with col3:
 
-        weights = [
-            "Tous"
-        ] + sorted(
-            df["weight_class"]
-            .dropna()
-            .unique()
-            .tolist()
+        st.markdown(
+            '<div class="criterion-card">'
+            '<b>Observation</b><br><br>'
+            f"{athlete['Observation']}"
+            "</div>",
+            unsafe_allow_html=True,
         )
 
-        weight = st.selectbox(
-            "Poids",
-            weights,
+    # --------------------------------------------------------
+    # SÉLECTION ÉQUIPE DE FRANCE
+    # --------------------------------------------------------
+
+    if show_selection:
+
+        render_selection_module(
+            full_name,
+            editable=editable,
         )
 
-    if style != "Tous":
-
-        df = df[
-            df["style"] == style
-        ]
-
-    if age != "Tous":
-
-        df = df[
-            df["age_group"] == age
-        ]
-
-    if weight != "Tous":
-
-        df = df[
-            df["weight_class"] == weight
-        ]
-
-    st.dataframe(
-        df[
-            [
-                "first_name",
-                "last_name",
-                "style",
-                "age_group",
-                "weight_class",
-                "collective",
-            ]
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    athlete_ids = df["id"].tolist()
-
-    if not athlete_ids:
-        return
-
-    selected = st.selectbox(
-        "Ouvrir la fiche",
-        athlete_ids,
-        format_func=lambda x:
-            next(
-                (
-                    f"{a['first_name']} "
-                    f"{a['last_name']}"
-                    for a in athletes
-                    if a["id"] == x
-                ),
-                x,
-            ),
-    )
-
-    athlete_page(
-        selected
-    )
-
-
-# =========================================================
-# ATHLETE PROFILE
-# =========================================================
-
-def athlete_page(
-    athlete_id
-):
-
-    athlete = (
-        supabase
-        .table("athletes")
-        .select("*")
-        .eq("id", athlete_id)
-        .single()
-        .execute()
-        .data
-    )
-
-    st.title(
-        f"{athlete['first_name']} "
-        f"{athlete['last_name']}"
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Style",
-        athlete.get("style") or "-"
-    )
-
-    c2.metric(
-        "Âge",
-        athlete.get("age_group") or "-"
-    )
-
-    c3.metric(
-        "Poids",
-        athlete.get("weight_class") or "-"
-    )
-
-    c4.metric(
-        "Collectif",
-        athlete.get("collective") or "-"
-    )
-
-    tabs = st.tabs(
-        [
-            "📋 Profil",
-            "🏆 Résultats",
-            "⚖️ Poids",
-            "📈 Tests",
-            "📅 Calendrier",
-            "🎯 Projet",
-            "🇫🇷 Sélection",
-        ]
-    )
-
-    with tabs[0]:
-
-        st.write(
-            "**Club :**",
-            athlete.get("club_id") or "-"
-        )
-
-        st.write(
-            "**Entraîneur :**",
-            athlete.get("coach_name") or "-"
-        )
-
-        st.text_area(
-            "Points forts",
-            athlete.get(
-                "strengths"
-            ) or "",
-            disabled=True,
-        )
-
-        st.text_area(
-            "Axes d'amélioration",
-            athlete.get(
-                "improvement_areas"
-            ) or "",
-            disabled=True,
-        )
-
-        st.text_area(
-            "Objectif",
-            athlete.get(
-                "objective"
-            ) or "",
-            disabled=True,
-        )
-
-    with tabs[1]:
-
-        results = (
-            supabase
-            .table("competition_results")
-            .select(
-                "*, competitions(name,competition_date)"
-            )
-            .eq(
-                "athlete_id",
-                athlete_id,
-            )
-            .execute()
-            .data
-        )
-
-        if results:
-
-            rows = []
-
-            for result in results:
-
-                competition = (
-                    result.get(
-                        "competitions"
-                    ) or {}
-                )
-
-                rows.append(
-                    {
-                        "Date":
-                            competition.get(
-                                "competition_date"
-                            ),
-
-                        "Compétition":
-                            competition.get(
-                                "name"
-                            ),
-
-                        "Matchs":
-                            result.get(
-                                "matches"
-                            ),
-
-                        "Victoires":
-                            result.get(
-                                "wins"
-                            ),
-
-                        "Défaites":
-                            result.get(
-                                "losses"
-                            ),
-
-                        "Classement":
-                            result.get(
-                                "ranking"
-                            ),
-
-                        "Résultat":
-                            result.get(
-                                "result"
-                            ),
-                    }
-                )
-
-            st.dataframe(
-                pd.DataFrame(rows),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        else:
-
-            st.info(
-                "Aucun résultat."
-            )
-
-    with tabs[2]:
-
-        weights = (
-            supabase
-            .table("weight_logs")
-            .select("*")
-            .eq(
-                "athlete_id",
-                athlete_id,
-            )
-            .order("measured_at")
-            .execute()
-            .data
-        )
-
-        if weights:
-
-            df = pd.DataFrame(
-                weights
-            )
-
-            df["measured_at"] = pd.to_datetime(
-                df["measured_at"]
-            )
-
-            fig = px.line(
-                df,
-                x="measured_at",
-                y="weight",
-                markers=True,
-                title="Évolution du poids",
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-            )
-
-        else:
-
-            st.info(
-                "Aucune donnée."
-            )
-
-    with tabs[3]:
-
-        tests = (
-            supabase
-            .table("physical_tests")
-            .select("*")
-            .eq(
-                "athlete_id",
-                athlete_id,
-            )
-            .order("test_date")
-            .execute()
-            .data
-        )
-
-        if tests:
-
-            st.dataframe(
-                pd.DataFrame(
-                    tests
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        else:
-
-            st.info(
-                "Aucun test."
-            )
-
-    with tabs[4]:
-
-        events = (
-            supabase
-            .table("calendar_events")
-            .select("*")
-            .eq(
-                "athlete_id",
-                athlete_id,
-            )
-            .order("event_date")
-            .execute()
-            .data
-        )
-
-        if events:
-
-            st.dataframe(
-                pd.DataFrame(
-                    events
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        else:
-
-            st.info(
-                "Aucun événement."
-            )
-
-    with tabs[5]:
-
-        projects = (
-            supabase
-            .table("performance_projects")
-            .select("*")
-            .eq(
-                "athlete_id",
-                athlete_id,
-            )
-            .order(
-                "updated_at",
-                desc=True,
-            )
-            .limit(1)
-            .execute()
-            .data
-        )
-
-        if projects:
-
-            project = projects[0]
-
-            st.subheader(
-                project.get(
-                    "objective"
-                ) or "Objectif"
-            )
-
-            st.write(
-                "**Points forts**"
-            )
-
-            st.write(
-                project.get(
-                    "strengths"
-                ) or "-"
-            )
-
-            st.write(
-                "**Axes d'amélioration**"
-            )
-
-            st.write(
-                project.get(
-                    "improvement_areas"
-                ) or "-"
-            )
-
-            st.write(
-                "**Plan d'action**"
-            )
-
-            st.write(
-                project.get(
-                    "action_plan"
-                ) or "-"
-            )
-
-        else:
-
-            st.info(
-                "Aucun projet."
-            )
-
-    with tabs[6]:
-
-        selection_history(
-            athlete_id
-        )
-
-
-# =========================================================
-# SELECTION HISTORY
-# =========================================================
-
-def selection_history(
-    athlete_id
-):
-
-    evaluations = (
-        supabase
-        .table(
-            "selection_evaluations"
-        )
-        .select("*")
-        .eq(
-            "athlete_id",
-            athlete_id,
-        )
-        .order(
-            "evaluation_date",
-            desc=True,
-        )
-        .execute()
-        .data
-    )
-
-    if not evaluations:
-
-        st.info(
-            "Aucune évaluation."
-        )
-
-        return
-
-    for evaluation in evaluations:
-
-        with st.expander(
-            f"{evaluation['evaluation_date']} · "
-            f"{evaluation['period']}"
-        ):
-
-            st.write(
-                "**Résultats TNR :**",
-                evaluation.get(
-                    "national_ranking_results"
-                ) or "-"
-            )
-
-            st.write(
-                "**Résultats internationaux :**",
-                evaluation.get(
-                    "international_results"
-                ) or "-"
-            )
-
-            st.write(
-                "**Stabilité catégorie :**",
-                evaluation.get(
-                    "category_stability"
-                ) or "-"
-            )
-
-            st.write(
-                "**Opposition :**",
-                evaluation.get(
-                    "opposition"
-                ) or "-"
-            )
-
-            st.write(
-                "**Progression :**",
-                evaluation.get(
-                    "progression"
-                ) or "-"
-            )
-
-            st.write(
-                "**Attitude :**",
-                evaluation.get(
-                    "attitude"
-                ) or "-"
-            )
-
-            st.write(
-                "**Engagement :**",
-                evaluation.get(
-                    "engagement"
-                ) or "-"
-            )
-
-            st.write(
-                "**Investissement :**",
-                evaluation.get(
-                    "investment"
-                ) or "-"
-            )
-
-            st.write(
-                "**Observation :**",
-                evaluation.get(
-                    "observation"
-                ) or "-"
-            )
-
-
-# =========================================================
-# SELECTION EVALUATION
-# =========================================================
-
-def selection_page():
-
-    st.title(
-        "🇫🇷 Évaluation Équipe de France"
-    )
-
-    athletes = (
-        supabase
-        .table("athletes")
-        .select("*")
-        .eq("active", True)
-        .order("last_name")
-        .execute()
-        .data
-    )
-
-    if not athletes:
-
-        st.info(
-            "Aucun athlète."
-        )
-
-        return
-
-    names = {
-        a["id"]:
-            f"{a['first_name']} "
-            f"{a['last_name']} — "
-            f"{a.get('style') or '-'} / "
-            f"{a.get('age_group') or '-'} / "
-            f"{a.get('weight_class') or '-'}"
-        for a in athletes
-    }
-
-    athlete_id = st.selectbox(
-        "Athlète",
-        list(names.keys()),
-        format_func=lambda x:
-            names[x],
-    )
-
-    period = st.selectbox(
-        "Période d'évaluation",
-        [
-            "Stage national",
-            "Tournoi international",
-            "Stage international",
-        ],
-    )
-
-    with st.form(
-        "selection_form"
-    ):
-
-        championship = st.checkbox(
-            "Participation au championnat de France"
-        )
-
-        national_results = st.text_area(
-            "Résultats TNR / tournois nationaux"
-        )
-
-        stability = st.text_area(
-            "Stabilité et pertinence dans la catégorie"
-        )
-
-        experience = st.text_area(
-            "Expérience de compétition"
-        )
-
-        international_results = st.text_area(
-            "Résultats internationaux"
-        )
-
-        opposition = st.text_area(
-            "Opposition rencontrée"
-        )
-
-        progression = st.text_area(
-            "Dynamique de progression"
-        )
-
-        attitude = st.text_area(
-            "Attitude"
-        )
-
-        engagement = st.text_area(
-            "Engagement"
-        )
-
-        investment = st.text_area(
-            "Investissement dans le projet"
-        )
-
-        observation = st.text_area(
-            "Observation du référent"
-        )
-
-        submitted = st.form_submit_button(
-            "Enregistrer",
-            use_container_width=True,
-        )
-
-    if submitted:
-
-        payload = {
-
-            "athlete_id":
-                athlete_id,
-
-            "referent_id":
-                st.session_state.user.id,
-
-            "evaluation_date":
-                date.today().isoformat(),
-
-            "period":
-                period,
-
-            "france_championship":
-                championship,
-
-            "national_ranking_results":
-                national_results,
-
-            "category_stability":
-                stability,
-
-            "previous_competition_experience":
-                experience,
-
-            "international_results":
-                international_results,
-
-            "opposition":
-                opposition,
-
-            "progression":
-                progression,
-
-            "attitude":
-                attitude,
-
-            "engagement":
-                engagement,
-
-            "investment":
-                investment,
-
-            "observation":
-                observation,
-        }
-
-        try:
-
-            supabase.table(
-                "selection_evaluations"
-            ).insert(
-                payload
-            ).execute()
-
-            audit(
-                "CREATE_SELECTION_EVALUATION",
-                "selection_evaluations",
-            )
-
-            st.success(
-                "Évaluation enregistrée."
-            )
-
-        except Exception as error:
-
-            st.error(
-                str(error)
-            )
-
-
-# =========================================================
-# ACCESS MANAGEMENT
-# =========================================================
-
-def access_page():
-
-    st.title(
-        "🔐 Gestion des accès"
-    )
-
-    if not is_manager():
-
-        st.error(
-            "Cette section est réservée au Manager."
-        )
-
-        return
-
-    users = (
-        supabase
-        .table("profiles")
-        .select("*")
-        .order("full_name")
-        .execute()
-        .data
-    )
-
-    if not users:
-        return
-
-    labels = {
-        u["id"]:
-            f"{u['full_name']} "
-            f"— {role_name(u['role'])}"
-        for u in users
-    }
-
-    user_id = st.selectbox(
-        "Utilisateur",
-        list(labels.keys()),
-        format_func=lambda x:
-            labels[x],
-    )
-
-    user = next(
-        u
-        for u in users
-        if u["id"] == user_id
-    )
-
-    st.divider()
-
-    st.subheader(
-        "Profil"
-    )
-
-    roles = [
-        "lutteur",
-        "entraineur",
-        "selectionneur",
-        "staff",
-        "manager",
+    # --------------------------------------------------------
+    # COMPÉTITIONS
+    # --------------------------------------------------------
+
+    st.subheader("🏆 Résultats en compétition")
+
+    competitions = [
+        x
+        for x in st.session_state.competitions
+        if x["Athlète"] == full_name
     ]
 
-    role = st.selectbox(
-        "Rôle",
-        roles,
-        index=roles.index(
-            user["role"]
-        ),
-    )
+    if competitions:
 
-    active = st.checkbox(
-        "Compte actif",
-        value=user["active"],
-    )
-
-    if st.button(
-        "Enregistrer le profil"
-    ):
-
-        supabase.table(
-            "profiles"
-        ).update(
-            {
-                "role":
-                    role,
-
-                "active":
-                    active,
-            }
-        ).eq(
-            "id",
-            user_id,
-        ).execute()
-
-        st.success(
-            "Profil enregistré."
-        )
-
-    # -----------------------------------------------------
-    # SCOPE
-    # -----------------------------------------------------
-
-    if role in [
-        "selectionneur",
-        "staff",
-    ]:
-
-        st.divider()
-
-        st.subheader(
-            "Périmètre"
-        )
-
-        style = st.selectbox(
-            "Style",
-            [
-                "Tous",
-                "Libre",
-                "Gréco-Romaine",
-                "Féminine",
-            ],
-        )
-
-        age = st.selectbox(
-            "Catégorie d'âge",
-            [
-                "Toutes",
-                "U15",
-                "U17",
-                "U20",
-            ],
-        )
-
-        weights = st.multiselect(
-            "Catégories de poids",
-            [
-                "40",
-                "45",
-                "48",
-                "50",
-                "53",
-                "55",
-                "57",
-                "60",
-                "61",
-                "62",
-                "65",
-                "67",
-                "70",
-                "72",
-                "74",
-                "77",
-                "79",
-                "82",
-                "86",
-                "87",
-                "92",
-                "97",
-                "125",
-            ],
-        )
-
-        if st.button(
-            "Enregistrer le périmètre"
-        ):
-
-            supabase.table(
-                "scopes"
-            ).delete().eq(
-                "user_id",
-                user_id,
-            ).execute()
-
-            style_value = (
-                None
-                if style == "Tous"
-                else style
-            )
-
-            age_value = (
-                None
-                if age == "Toutes"
-                else age
-            )
-
-            if not weights:
-
-                weights = [None]
-
-            for weight in weights:
-
-                supabase.table(
-                    "scopes"
-                ).insert(
-                    {
-                        "user_id":
-                            user_id,
-
-                        "style":
-                            style_value,
-
-                        "age_group":
-                            age_value,
-
-                        "weight_class":
-                            weight,
-                    }
-                ).execute()
-
-            st.success(
-                "Périmètre enregistré."
-            )
-
-    # -----------------------------------------------------
-    # PERMISSIONS
-    # -----------------------------------------------------
-
-    st.divider()
-
-    st.subheader(
-        "Droits"
-    )
-
-    permissions = [
-
-        "view_athlete",
-
-        "view_competition",
-
-        "view_weight",
-
-        "view_tests",
-
-        "view_project",
-
-        "view_selection",
-
-        "add_evaluation",
-
-        "edit_evaluation",
-
-        "add_result",
-
-        "edit_result",
-
-    ]
-
-    existing = (
-        supabase
-        .table("permissions")
-        .select("*")
-        .eq(
-            "user_id",
-            user_id,
-        )
-        .execute()
-        .data
-    )
-
-    existing_names = {
-        p["permission"]
-        for p in existing
-        if p["enabled"]
-    }
-
-    selected_permissions = []
-
-    for permission in permissions:
-
-        checked = st.checkbox(
-            permission,
-            value=permission in existing_names,
-        )
-
-        if checked:
-
-            selected_permissions.append(
-                permission
-            )
-
-    if st.button(
-        "Enregistrer les droits"
-    ):
-
-        supabase.table(
-            "permissions"
-        ).delete().eq(
-            "user_id",
-            user_id,
-        ).execute()
-
-        for permission in selected_permissions:
-
-            supabase.table(
-                "permissions"
-            ).insert(
-                {
-                    "user_id":
-                        user_id,
-
-                    "permission":
-                        permission,
-
-                    "enabled":
-                        True,
-                }
-            ).execute()
-
-        audit(
-            "UPDATE_PERMISSIONS",
-            "permissions",
-            user_id,
-        )
-
-        st.success(
-            "Droits enregistrés."
-        )
-
-
-# =========================================================
-# USER MANAGEMENT
-# =========================================================
-
-def users_page():
-
-    st.title(
-        "👥 Utilisateurs"
-    )
-
-    if not is_manager():
-
-        st.error(
-            "Accès Manager uniquement."
-        )
-
-        return
-
-    users = (
-        supabase
-        .table("profiles")
-        .select("*")
-        .order("full_name")
-        .execute()
-        .data
-    )
-
-    if users:
-
-        df = pd.DataFrame(
-            users
+        df_comp = pd.DataFrame(
+            competitions
         )
 
         st.dataframe(
-            df[
+            df_comp[
                 [
-                    "full_name",
-                    "email",
-                    "role",
-                    "active",
+                    "Date",
+                    "Compétition",
+                    "Type",
+                    "Catégorie",
+                    "Combats",
+                    "Victoires",
+                    "Défaites",
+                    "Classement",
+                    "Bilan",
+                    "Opposition",
+                    "Résumé",
                 ]
             ],
             use_container_width=True,
             hide_index=True,
         )
 
-    st.divider()
+    else:
+
+        st.info(
+            "Aucun résultat enregistré."
+        )
+
+    # --------------------------------------------------------
+    # POIDS
+    # --------------------------------------------------------
+
+    st.subheader("⚖️ Évolution du poids")
+
+    weights = [
+        x
+        for x in st.session_state.weight_log
+        if x["Athlète"] == full_name
+    ]
+
+    if weights:
+
+        df_weight = pd.DataFrame(
+            weights
+        )
+
+        df_weight["Date"] = pd.to_datetime(
+            df_weight["Date"]
+        )
+
+        df_weight = df_weight.sort_values(
+            "Date"
+        )
+
+        chart = df_weight.set_index(
+            "Date"
+        )
+
+        st.line_chart(
+            chart["Poids"],
+            height=280,
+        )
+
+        last_weight = chart["Poids"].iloc[-1]
+        first_weight = chart["Poids"].iloc[0]
+
+        evolution = (
+            last_weight - first_weight
+        )
+
+        c1, c2 = st.columns(2)
+
+        c1.metric(
+            "Poids actuel",
+            f"{last_weight:.1f} kg"
+        )
+
+        c2.metric(
+            "Évolution",
+            f"{evolution:+.1f} kg"
+        )
+
+    else:
+
+        st.info(
+            "Aucune donnée de poids."
+        )
+
+    # --------------------------------------------------------
+    # TESTS
+    # --------------------------------------------------------
 
     st.subheader(
-        "Créer un utilisateur"
+        "🧪 Évolution des tests physiques"
     )
 
-    name = st.text_input(
-        "Nom complet"
-    )
+    athlete_tests = [
+        x
+        for x in st.session_state.tests
+        if x["Athlète"] == full_name
+    ]
 
-    email = st.text_input(
-        "Email"
-    )
+    if athlete_tests:
 
-    password = st.text_input(
-        "Mot de passe initial",
-        type="password",
-    )
-
-    role = st.selectbox(
-        "Rôle",
-        [
-            "lutteur",
-            "entraineur",
-            "selectionneur",
-            "staff",
-            "manager",
-        ],
-    )
-
-    if st.button(
-        "Créer le compte"
-    ):
-
-        if not email or not password:
-
-            st.error(
-                "Email et mot de passe obligatoires."
-            )
-
-            return
-
-        try:
-
-            admin = get_admin_client()
-
-            response = (
-                admin.auth.admin.create_user(
-                    {
-                        "email":
-                            email,
-
-                        "password":
-                            password,
-
-                        "email_confirm":
-                            True,
-
-                        "user_metadata":
-                            {
-                                "full_name":
-                                    name
-                            },
-                    }
+        test_names = sorted(
+            list(
+                set(
+                    x["Test"]
+                    for x in athlete_tests
                 )
             )
-
-            new_user = response.user
-
-            supabase.table(
-                "profiles"
-            ).update(
-                {
-                    "full_name":
-                        name,
-
-                    "role":
-                        role,
-                }
-            ).eq(
-                "id",
-                new_user.id,
-            ).execute()
-
-            audit(
-                "CREATE_USER",
-                "profile",
-                new_user.id,
-            )
-
-            st.success(
-                "Utilisateur créé."
-            )
-
-            st.rerun()
-
-        except Exception as error:
-
-            st.error(
-                str(error)
-            )
-
-
-# =========================================================
-# AUDIT
-# =========================================================
-
-def audit_page():
-
-    st.title(
-        "📝 Journal des actions"
-    )
-
-    if not is_manager():
-        return
-
-    logs = (
-        supabase
-        .table("audit_logs")
-        .select("*")
-        .order(
-            "created_at",
-            desc=True,
         )
-        .limit(300)
-        .execute()
-        .data
+
+        selected_test = st.selectbox(
+            "Test à afficher",
+            test_names,
+            key=f"test_{full_name}",
+        )
+
+        filtered_tests = [
+            x
+            for x in athlete_tests
+            if x["Test"] == selected_test
+        ]
+
+        df_test = pd.DataFrame(
+            filtered_tests
+        )
+
+        df_test["Date"] = pd.to_datetime(
+            df_test["Date"]
+        )
+
+        df_test = df_test.sort_values(
+            "Date"
+        )
+
+        st.line_chart(
+            df_test.set_index("Date")["Valeur"],
+            height=280,
+        )
+
+    else:
+
+        st.info(
+            "Aucun test physique enregistré."
+        )
+
+    # --------------------------------------------------------
+    # CALENDRIER
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📅 Prochaines échéances"
     )
 
-    if logs:
+    calendar = [
+        x
+        for x in st.session_state.calendar
+        if x["Athlète"] == full_name
+    ]
+
+    if calendar:
+
+        df_calendar = pd.DataFrame(
+            calendar
+        )
+
+        df_calendar["Date"] = pd.to_datetime(
+            df_calendar["Date"]
+        )
 
         st.dataframe(
-            pd.DataFrame(logs),
+            df_calendar.sort_values("Date"),
             use_container_width=True,
             hide_index=True,
         )
@@ -1765,195 +845,2017 @@ def audit_page():
     else:
 
         st.info(
-            "Aucune action enregistrée."
+            "Aucune échéance programmée."
         )
 
+    # --------------------------------------------------------
+    # ÉDITION FICHE
+    # --------------------------------------------------------
 
-# =========================================================
-# STAGES
-# =========================================================
+    if editable:
 
-def stages_page():
+        st.divider()
 
-    st.title(
-        "🏕️ Stages"
-    )
-
-    stages = (
-        supabase
-        .table("stages")
-        .select("*")
-        .order("start_date")
-        .execute()
-        .data
-    )
-
-    if stages:
-
-        st.dataframe(
-            pd.DataFrame(stages),
-            use_container_width=True,
-            hide_index=True,
+        st.subheader(
+            "✏️ Modifier la fiche"
         )
 
-    else:
+        with st.form(
+            f"edit_athlete_{full_name}"
+        ):
 
-        st.info(
-            "Aucun stage enregistré."
-        )
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                new_club = st.text_input(
+                    "Club",
+                    athlete["Club"],
+                )
+
+                new_style = st.selectbox(
+                    "Style",
+                    [
+                        "Lutte libre",
+                        "Lutte gréco-romaine",
+                        "Lutte féminine",
+                    ],
+                    index=[
+                        "Lutte libre",
+                        "Lutte gréco-romaine",
+                        "Lutte féminine",
+                    ].index(
+                        athlete["Style"]
+                    ),
+                )
+
+                new_category = st.text_input(
+                    "Catégorie",
+                    athlete["Catégorie"],
+                )
+
+                new_weight_category = st.text_input(
+                    "Catégorie de poids",
+                    athlete["Catégorie poids"],
+                )
+
+                new_coach = st.text_input(
+                    "Entraîneur",
+                    athlete["Entraîneur"],
+                )
+
+            with col2:
+
+                new_collective = st.text_input(
+                    "Collectif",
+                    athlete["Collectif"],
+                )
+
+                new_objective = st.text_input(
+                    "Objectif",
+                    athlete["Objectif"],
+                )
+
+                new_strengths = st.text_area(
+                    "Points forts",
+                    athlete["Points forts"],
+                )
+
+                new_progression = st.text_area(
+                    "Axes de progression",
+                    athlete["Axes progression"],
+                )
+
+                new_observation = st.text_area(
+                    "Observation",
+                    athlete["Observation"],
+                )
+
+            submitted = st.form_submit_button(
+                "💾 Enregistrer",
+                type="primary",
+                use_container_width=True,
+            )
+
+            if submitted:
+
+                athlete["Club"] = new_club
+                athlete["Style"] = new_style
+                athlete["Catégorie"] = new_category
+                athlete["Catégorie poids"] = new_weight_category
+                athlete["Entraîneur"] = new_coach
+                athlete["Collectif"] = new_collective
+                athlete["Objectif"] = new_objective
+                athlete["Points forts"] = new_strengths
+                athlete["Axes progression"] = new_progression
+                athlete["Observation"] = new_observation
+
+                st.success(
+                    "Fiche mise à jour."
+                )
+
+                st.rerun()
 
 
-# =========================================================
-# STATISTICS
-# =========================================================
+# ============================================================
+# MODULE SÉLECTION ÉQUIPE DE FRANCE
+# ============================================================
 
-def statistics_page():
+def render_selection_module(
+    full_name,
+    editable=False,
+):
 
-    st.title(
-        "📊 Statistiques"
+    athlete = get_athlete(full_name)
+
+    data = selection_data_for(
+        full_name
     )
 
-    athletes = (
-        supabase
-        .table("athletes")
-        .select("*")
-        .eq("active", True)
-        .execute()
-        .data
+    competitions = data["competitions"]
+    evaluations = data["evaluations"]
+    projects = data["projects"]
+    stages = data["stages_nationaux"]
+
+    summary = competition_summary(
+        full_name
     )
 
-    if not athletes:
-        return
+    st.divider()
 
-    df = pd.DataFrame(
-        athletes
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>🇫🇷 Sélection Équipe de France</h1>
+            <p>
+            Synthèse des éléments d'évaluation du projet
+            de performance
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.info(
+        "Cette page rassemble les éléments prévus dans "
+        "les critères d'évaluation. Elle ne produit pas "
+        "automatiquement une décision de sélection."
+    )
+
+    # --------------------------------------------------------
+    # SYNTHÈSE
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📊 Synthèse de la saison"
+    )
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    c1.metric(
+        "TNR",
+        summary["tnr"]
+    )
+
+    c2.metric(
+        "Championnats de France",
+        summary["france"]
+    )
+
+    c3.metric(
+        "International",
+        summary["international"]
+    )
+
+    c4.metric(
+        "Stages nationaux",
+        len(stages)
+    )
+
+    c5.metric(
+        "Évaluations référent",
+        len(evaluations)
+    )
+
+    # --------------------------------------------------------
+    # CRITÈRES
+    # --------------------------------------------------------
+
+    st.subheader(
+        "📋 Critères d'évaluation"
     )
 
     col1, col2 = st.columns(2)
 
     with col1:
 
-        fig = px.bar(
-            df["style"]
-            .value_counts()
-            .reset_index(),
-            x="style",
-            y="count",
-            title="Athlètes par style",
+        st.markdown(
+            f"""
+            <div class="criterion-card">
+            <b>🏆 Résultats nationaux</b><br><br>
+            TNR enregistrés : {summary['tnr']}<br>
+            Championnat de France :
+            {summary['france']}<br>
+            Expérience compétitive :
+            {len(competitions)} compétition(s)
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
+        st.write("")
+
+        st.markdown(
+            f"""
+            <div class="criterion-card">
+            <b>⚖️ Stabilité de catégorie</b><br><br>
+            Catégorie de référence :
+            <b>{athlete['Catégorie poids']}</b><br><br>
+            Les catégories utilisées en compétition
+            sont consultables dans l'historique.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.write("")
+
+        st.markdown(
+            f"""
+            <div class="criterion-card">
+            <b>🌍 Expérience internationale</b><br><br>
+            Tournois internationaux enregistrés :
+            <b>{summary['international']}</b>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
     with col2:
 
-        fig = px.bar(
-            df["age_group"]
-            .value_counts()
-            .reset_index(),
-            x="age_group",
-            y="count",
-            title="Athlètes par catégorie",
+        st.markdown(
+            f"""
+            <div class="criterion-card">
+            <b>📈 Dynamique de progression</b><br><br>
+            Évaluations disponibles :
+            <b>{len(evaluations)}</b><br><br>
+            Les observations successives permettent
+            de suivre l'évolution du lutteur.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
+        st.write("")
+
+        st.markdown(
+            f"""
+            <div class="criterion-card">
+            <b>🤝 Attitude / engagement</b><br><br>
+            Évaluations référent disponibles :
+            <b>{len(evaluations)}</b><br><br>
+            Les appréciations sont conservées dans
+            l'historique.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
+        st.write("")
 
-# =========================================================
-# ROUTER
-# =========================================================
+        st.markdown(
+            f"""
+            <div class="criterion-card">
+            <b>🎯 Projet de performance</b><br><br>
+            Projet enregistré :
+            <b>{"Oui" if projects else "Non"}</b>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-def router(page):
+    # --------------------------------------------------------
+    # HISTORIQUE DES COMPÉTITIONS NATIONALES
+    # --------------------------------------------------------
 
-    role = st.session_state.profile[
-        "role"
+    st.subheader(
+        "🏆 Résultats TNR / Championnat de France"
+    )
+
+    national_competitions = [
+        x
+        for x in competitions
+        if x["Type"] in [
+            "TNR / Ranking national",
+            "Championnat de France",
+        ]
     ]
 
-    if page == "🏠 Vue globale":
+    if national_competitions:
 
-        manager_dashboard()
-
-    elif page == "🏠 Tableau de bord":
-
-        manager_dashboard()
-
-    elif page == "🏠 Accueil":
-
-        st.title(
-            "🏠 Mon espace"
+        df = pd.DataFrame(
+            national_competitions
         )
 
-        st.success(
-            f"Bienvenue "
-            f"{st.session_state.profile['full_name']}"
+        st.dataframe(
+            df[
+                [
+                    "Date",
+                    "Compétition",
+                    "Type",
+                    "Catégorie",
+                    "Combats",
+                    "Victoires",
+                    "Défaites",
+                    "Classement",
+                    "Opposition",
+                    "Résumé",
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True,
         )
-
-    elif page == "🏠 Mon périmètre":
-
-        athletes_page()
-
-    elif page in [
-        "🤼 Athlètes",
-        "🤼 Mes athlètes",
-    ]:
-
-        athletes_page()
-
-    elif page == "👥 Utilisateurs":
-
-        users_page()
-
-    elif page == "🔐 Gestion des accès":
-
-        access_page()
-
-    elif page in [
-        "🇫🇷 Évaluations",
-        "🇫🇷 Sélection EDF",
-        "🇫🇷 Suivi sélection",
-        "🇫🇷 Mon suivi EDF",
-    ]:
-
-        selection_page()
-
-    elif page in [
-        "🏕️ Stages",
-    ]:
-
-        stages_page()
-
-    elif page == "📊 Statistiques":
-
-        statistics_page()
-
-    elif page == "📝 Audit":
-
-        audit_page()
 
     else:
 
-        st.title(page)
-
         st.info(
-            "Module en cours de connexion."
+            "Aucun résultat national enregistré."
         )
 
+    # --------------------------------------------------------
+    # INTERNATIONAL
+    # --------------------------------------------------------
 
-# =========================================================
-# APPLICATION
-# =========================================================
+    st.subheader(
+        "🌍 Expérience internationale"
+    )
 
-if st.session_state.user is None:
+    international = [
+        x
+        for x in competitions
+        if x["Type"] == "Tournoi international"
+    ]
 
-    login()
+    if international:
+
+        st.dataframe(
+            pd.DataFrame(
+                international
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info(
+            "Aucun tournoi international enregistré."
+        )
+
+    # --------------------------------------------------------
+    # ÉVALUATIONS RÉFÉRENTS
+    # --------------------------------------------------------
+
+    st.subheader(
+        "👁️ Évaluations des référents"
+    )
+
+    if evaluations:
+
+        for index, evaluation in enumerate(
+            evaluations
+        ):
+
+            with st.expander(
+                f"{evaluation['Date']} — "
+                f"{evaluation['Référent']} — "
+                f"{evaluation['Période']}"
+            ):
+
+                c1, c2 = st.columns(2)
+
+                with c1:
+
+                    st.markdown(
+                        "**Résultats**"
+                    )
+
+                    st.write(
+                        evaluation["Résultats"]
+                    )
+
+                    st.markdown(
+                        "**Opposition rencontrée**"
+                    )
+
+                    st.write(
+                        evaluation["Opposition"]
+                    )
+
+                    st.markdown(
+                        "**Stabilité de catégorie**"
+                    )
+
+                    st.write(
+                        evaluation[
+                            "Stabilité catégorie"
+                        ]
+                    )
+
+                    st.markdown(
+                        "**Expérience**"
+                    )
+
+                    st.write(
+                        evaluation["Expérience"]
+                    )
+
+                with c2:
+
+                    st.markdown(
+                        "**Dynamique de progression**"
+                    )
+
+                    st.write(
+                        evaluation["Progression"]
+                    )
+
+                    st.markdown(
+                        "**Attitude**"
+                    )
+
+                    st.write(
+                        evaluation["Attitude"]
+                    )
+
+                    st.markdown(
+                        "**Engagement**"
+                    )
+
+                    st.write(
+                        evaluation["Engagement"]
+                    )
+
+                    st.markdown(
+                        "**Investissement**"
+                    )
+
+                    st.write(
+                        evaluation["Investissement"]
+                    )
+
+                st.markdown(
+                    "**Observation du référent**"
+                )
+
+                st.info(
+                    evaluation["Observation"]
+                )
+
+    else:
+
+        st.info(
+            "Aucune évaluation de référent enregistrée."
+        )
+
+    # --------------------------------------------------------
+    # AJOUT ÉVALUATION
+    # --------------------------------------------------------
+
+    if editable:
+
+        st.divider()
+
+        st.subheader(
+            "➕ Ajouter une évaluation"
+        )
+
+        with st.form(
+            f"selection_evaluation_{full_name}"
+        ):
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                eval_date = st.date_input(
+                    "Date",
+                    value=date.today(),
+                )
+
+                referent = st.text_input(
+                    "Référent"
+                )
+
+                period = st.selectbox(
+                    "Période d'évaluation",
+                    [
+                        "Après stage national",
+                        "Après TNR",
+                        "Après Championnat de France",
+                        "Après tournoi international",
+                        "Après stage international",
+                        "Bilan de saison",
+                    ],
+                )
+
+                results = st.text_area(
+                    "Résultats"
+                )
+
+                opposition = st.text_area(
+                    "Opposition rencontrée"
+                )
+
+                category_stability = st.text_area(
+                    "Stabilité et pertinence "
+                    "de la catégorie"
+                )
+
+                experience = st.text_area(
+                    "Expérience de compétition antérieure"
+                )
+
+            with col2:
+
+                progression = st.text_area(
+                    "Dynamique de progression"
+                )
+
+                attitude = st.text_area(
+                    "Attitude"
+                )
+
+                engagement = st.text_area(
+                    "Engagement"
+                )
+
+                investment = st.text_area(
+                    "Investissement dans le projet "
+                    "de performance individuel"
+                )
+
+                observation = st.text_area(
+                    "Observation du référent"
+                )
+
+            submit = st.form_submit_button(
+                "💾 Enregistrer l'évaluation",
+                type="primary",
+                use_container_width=True,
+            )
+
+            if submit:
+
+                st.session_state.evaluations_selection.append(
+                    {
+                        "Athlète": full_name,
+                        "Date": str(eval_date),
+                        "Référent": referent,
+                        "Période": period,
+                        "Résultats": results,
+                        "Opposition": opposition,
+                        "Stabilité catégorie":
+                            category_stability,
+                        "Expérience": experience,
+                        "Progression": progression,
+                        "Attitude": attitude,
+                        "Engagement": engagement,
+                        "Investissement": investment,
+                        "Observation": observation,
+                    }
+                )
+
+                st.success(
+                    "Évaluation enregistrée."
+                )
+
+                st.rerun()
+
+    # --------------------------------------------------------
+    # PROJET DE PERFORMANCE
+    # --------------------------------------------------------
+
+    st.subheader(
+        "🎯 Projet de performance individuel"
+    )
+
+    if projects:
+
+        latest_project = projects[-1]
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            st.markdown(
+                "**Objectif principal**"
+            )
+
+            st.info(
+                latest_project[
+                    "Objectif principal"
+                ]
+            )
+
+            st.markdown(
+                "**Objectifs intermédiaires**"
+            )
+
+            st.write(
+                latest_project[
+                    "Objectifs intermédiaires"
+                ]
+            )
+
+            st.markdown(
+                "**Compétitions prioritaires**"
+            )
+
+            st.write(
+                latest_project[
+                    "Compétitions prioritaires"
+                ]
+            )
+
+        with c2:
+
+            st.markdown(
+                "**Objectif technique**"
+            )
+
+            st.write(
+                latest_project[
+                    "Objectif technique"
+                ]
+            )
+
+            st.markdown(
+                "**Objectif physique**"
+            )
+
+            st.write(
+                latest_project[
+                    "Objectif physique"
+                ]
+            )
+
+            st.markdown(
+                "**Objectif tactique**"
+            )
+
+            st.write(
+                latest_project[
+                    "Objectif tactique"
+                ]
+            )
+
+        st.markdown(
+            "**Engagement du lutteur**"
+        )
+
+        st.write(
+            latest_project[
+                "Engagement lutteur"
+            ]
+        )
+
+        st.markdown(
+            "**Bilan**"
+        )
+
+        st.info(
+            latest_project["Bilan"]
+        )
+
+    else:
+
+        st.info(
+            "Aucun projet de performance enregistré."
+        )
+
+    # --------------------------------------------------------
+    # AJOUT PROJET
+    # --------------------------------------------------------
+
+    if editable:
+
+        with st.expander(
+            "➕ Créer / mettre à jour le projet de performance"
+        ):
+
+            with st.form(
+                f"project_{full_name}"
+            ):
+
+                project_date = st.date_input(
+                    "Date",
+                    value=date.today(),
+                )
+
+                objective_main = st.text_input(
+                    "Objectif principal"
+                )
+
+                intermediate = st.text_area(
+                    "Objectifs intermédiaires"
+                )
+
+                technical = st.text_area(
+                    "Objectif technique"
+                )
+
+                physical = st.text_area(
+                    "Objectif physique"
+                )
+
+                tactical = st.text_area(
+                    "Objectif tactique"
+                )
+
+                priority_competitions = st.text_area(
+                    "Compétitions prioritaires"
+                )
+
+                athlete_commitment = st.text_area(
+                    "Engagement du lutteur"
+                )
+
+                project_review = st.text_area(
+                    "Bilan / point d'étape"
+                )
+
+                submit = st.form_submit_button(
+                    "💾 Enregistrer le projet",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+                if submit:
+
+                    st.session_state.projets_performance.append(
+                        {
+                            "Athlète": full_name,
+                            "Date": str(project_date),
+                            "Objectif principal":
+                                objective_main,
+                            "Objectifs intermédiaires":
+                                intermediate,
+                            "Objectif technique":
+                                technical,
+                            "Objectif physique":
+                                physical,
+                            "Objectif tactique":
+                                tactical,
+                            "Compétitions prioritaires":
+                                priority_competitions,
+                            "Engagement lutteur":
+                                athlete_commitment,
+                            "Bilan":
+                                project_review,
+                        }
+                    )
+
+                    st.success(
+                        "Projet enregistré."
+                    )
+
+                    st.rerun()
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+st.sidebar.title(
+    "🤼 France Lutte Jeunes"
+)
+
+st.sidebar.caption(
+    "Athlete Management System"
+)
+
+role = st.sidebar.selectbox(
+    "Profil utilisateur",
+    [
+        "Lutteur / Lutteuse",
+        "Entraîneur / Club",
+        "Sélectionneur / Référent",
+        "Administration",
+    ],
+)
+
+# ============================================================
+# LUTTEUR
+# ============================================================
+
+if role == "Lutteur / Lutteuse":
+
+    athlete = st.sidebar.selectbox(
+        "Mon profil",
+        athlete_names(),
+    )
+
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "🏠 Tableau de bord",
+            "📋 Ma fiche récap",
+            "🇫🇷 Mon suivi Équipe de France",
+            "📅 Mon calendrier",
+            "🏆 Mes compétitions",
+            "⚖️ Mon poids",
+            "🧪 Mes tests",
+        ],
+    )
+
+# ============================================================
+# CLUB
+# ============================================================
+
+elif role == "Entraîneur / Club":
+
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "🏠 Tableau de bord",
+            "👥 Mes lutteurs",
+            "📋 Fiches lutteurs",
+            "🇫🇷 Suivi sélection",
+            "🏆 Compétitions",
+            "🧪 Tests physiques",
+            "📅 Calendrier",
+        ],
+    )
+
+# ============================================================
+# SÉLECTIONNEUR
+# ============================================================
+
+elif role == "Sélectionneur / Référent":
+
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "🏠 Tableau national",
+            "🇫🇷 Sélection Équipe de France",
+            "👥 Collectifs",
+            "📋 Fiches lutteurs",
+            "👁️ Évaluations référents",
+            "🎯 Projets de performance",
+            "📅 Planning national",
+            "🏕️ Stages",
+            "🏆 Compétitions",
+            "🧪 Tests physiques",
+        ],
+    )
+
+# ============================================================
+# ADMIN
+# ============================================================
 
 else:
 
-    page = sidebar()
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "🏠 Administration",
+            "👥 Lutteurs",
+            "📋 Fiches",
+            "🇫🇷 Sélection Équipe de France",
+            "📊 Statistiques",
+            "📅 Planning",
+        ],
+    )
 
-    router(page)
+
+# ============================================================
+# DASHBOARD LUTTEUR
+# ============================================================
+
+if page == "🏠 Tableau de bord":
+
+    if role == "Lutteur / Lutteuse":
+
+        st.markdown(
+            """
+            <div class="hero">
+                <h1>🤼 Mon espace sportif</h1>
+                <p>
+                Suivi individuel de la saison
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        stats = stats_for(athlete)
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Compétitions",
+            stats["competitions"]
+        )
+
+        c2.metric(
+            "Combats",
+            stats["matches"]
+        )
+
+        c3.metric(
+            "Victoires",
+            stats["wins"]
+        )
+
+        c4.metric(
+            "Podiums",
+            stats["podiums"]
+        )
+
+        athlete_data = get_athlete(
+            athlete
+        )
+
+        st.subheader(
+            "🎯 Mon objectif"
+        )
+
+        st.info(
+            athlete_data["Objectif"]
+        )
+
+        st.subheader(
+            "🇫🇷 Suivi Équipe de France"
+        )
+
+        summary = competition_summary(
+            athlete
+        )
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "TNR",
+            summary["tnr"]
+        )
+
+        c2.metric(
+            "Championnat de France",
+            summary["france"]
+        )
+
+        c3.metric(
+            "International",
+            summary["international"]
+        )
+
+
+# ============================================================
+# FICHE LUTTEUR
+# ============================================================
+
+elif page == "📋 Ma fiche récap":
+
+    render_athlete_sheet(
+        athlete,
+        editable=True,
+        show_selection=True,
+    )
+
+
+# ============================================================
+# SUIVI EDF LUTTEUR
+# ============================================================
+
+elif page == "🇫🇷 Mon suivi Équipe de France":
+
+    render_selection_module(
+        athlete,
+        editable=False,
+    )
+
+
+# ============================================================
+# CALENDRIER LUTTEUR
+# ============================================================
+
+elif page == "📅 Mon calendrier":
+
+    st.title(
+        "📅 Mon calendrier"
+    )
+
+    with st.form(
+        "new_calendar"
+    ):
+
+        event_date = st.date_input(
+            "Date",
+            value=date.today(),
+        )
+
+        event_type = st.selectbox(
+            "Type",
+            [
+                "Compétition",
+                "Stage national",
+                "Stage international",
+                "Entraînement",
+                "Préparation physique",
+                "Test",
+                "Récupération",
+            ],
+        )
+
+        title = st.text_input(
+            "Intitulé"
+        )
+
+        objective = st.text_area(
+            "Objectif"
+        )
+
+        submit = st.form_submit_button(
+            "Ajouter",
+            type="primary",
+        )
+
+        if submit:
+
+            st.session_state.calendar.append(
+                {
+                    "Athlète": athlete,
+                    "Date": str(event_date),
+                    "Type": event_type,
+                    "Intitulé": title,
+                    "Objectif": objective,
+                }
+            )
+
+            st.success(
+                "Événement ajouté."
+            )
+
+            st.rerun()
+
+    data = [
+        x
+        for x in st.session_state.calendar
+        if x["Athlète"] == athlete
+    ]
+
+    if data:
+
+        df = pd.DataFrame(data)
+
+        df["Date"] = pd.to_datetime(
+            df["Date"]
+        )
+
+        st.dataframe(
+            df.sort_values("Date"),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
+# ============================================================
+# COMPÉTITIONS LUTTEUR
+# ============================================================
+
+elif page == "🏆 Mes compétitions":
+
+    st.title(
+        "🏆 Mes compétitions"
+    )
+
+    with st.form(
+        "competition_report"
+    ):
+
+        competition_date = st.date_input(
+            "Date",
+            value=date.today(),
+        )
+
+        competition_name = st.text_input(
+            "Compétition"
+        )
+
+        competition_type = st.selectbox(
+            "Type",
+            [
+                "TNR / Ranking national",
+                "Championnat de France",
+                "Tournoi international",
+                "Autre compétition",
+            ],
+        )
+
+        category = st.text_input(
+            "Catégorie"
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+
+            matches = st.number_input(
+                "Nombre de combats",
+                min_value=0,
+                step=1,
+            )
+
+        with col2:
+
+            wins = st.number_input(
+                "Victoires",
+                min_value=0,
+                step=1,
+            )
+
+        with col3:
+
+            losses = st.number_input(
+                "Défaites",
+                min_value=0,
+                step=1,
+            )
+
+        ranking = st.text_input(
+            "Résultat / classement"
+        )
+
+        opposition = st.text_area(
+            "Opposition rencontrée"
+        )
+
+        assessment = st.selectbox(
+            "Bilan général",
+            [
+                "Difficile",
+                "Moyen",
+                "Bien",
+                "Très bien",
+            ],
+        )
+
+        summary = st.text_area(
+            "Résumé"
+        )
+
+        submit = st.form_submit_button(
+            "💾 Enregistrer",
+            type="primary",
+            use_container_width=True,
+        )
+
+        if submit:
+
+            st.session_state.competitions.append(
+                {
+                    "Athlète": athlete,
+                    "Date": str(
+                        competition_date
+                    ),
+                    "Compétition":
+                        competition_name,
+                    "Type":
+                        competition_type,
+                    "Catégorie":
+                        category,
+                    "Combats":
+                        matches,
+                    "Victoires":
+                        wins,
+                    "Défaites":
+                        losses,
+                    "Classement":
+                        ranking,
+                    "Bilan":
+                        assessment,
+                    "Résumé":
+                        summary,
+                    "Opposition":
+                        opposition,
+                }
+            )
+
+            st.success(
+                "Compte-rendu enregistré."
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# POIDS
+# ============================================================
+
+elif page == "⚖️ Mon poids":
+
+    st.title(
+        "⚖️ Mon suivi du poids"
+    )
+
+    with st.form(
+        "weight_form"
+    ):
+
+        weight_date = st.date_input(
+            "Date",
+            value=date.today(),
+        )
+
+        weight = st.number_input(
+            "Poids (kg)",
+            min_value=0.0,
+            max_value=200.0,
+            value=65.0,
+            step=0.1,
+        )
+
+        submit = st.form_submit_button(
+            "Ajouter",
+            type="primary",
+        )
+
+        if submit:
+
+            st.session_state.weight_log.append(
+                {
+                    "Athlète": athlete,
+                    "Date": str(
+                        weight_date
+                    ),
+                    "Poids": weight,
+                }
+            )
+
+            st.success(
+                "Poids enregistré."
+            )
+
+            st.rerun()
+
+    weights = [
+        x
+        for x in st.session_state.weight_log
+        if x["Athlète"] == athlete
+    ]
+
+    if weights:
+
+        df = pd.DataFrame(
+            weights
+        )
+
+        df["Date"] = pd.to_datetime(
+            df["Date"]
+        )
+
+        st.line_chart(
+            df.sort_values(
+                "Date"
+            ).set_index("Date")[
+                "Poids"
+            ],
+            height=350,
+        )
+
+
+# ============================================================
+# TESTS
+# ============================================================
+
+elif page == "🧪 Mes tests":
+
+    st.title(
+        "🧪 Mes tests physiques"
+    )
+
+    with st.form(
+        "test_form"
+    ):
+
+        test_date = st.date_input(
+            "Date",
+            value=date.today(),
+        )
+
+        test_name = st.text_input(
+            "Test"
+        )
+
+        value = st.number_input(
+            "Valeur",
+            value=0.0,
+        )
+
+        unit = st.text_input(
+            "Unité"
+        )
+
+        submit = st.form_submit_button(
+            "Ajouter",
+            type="primary",
+        )
+
+        if submit:
+
+            st.session_state.tests.append(
+                {
+                    "Athlète": athlete,
+                    "Date": str(
+                        test_date
+                    ),
+                    "Test": test_name,
+                    "Valeur": value,
+                    "Unité": unit,
+                }
+            )
+
+            st.success(
+                "Test enregistré."
+            )
+
+            st.rerun()
+
+
+# ============================================================
+# CLUB
+# ============================================================
+
+elif page == "👥 Mes lutteurs":
+
+    st.title(
+        "👥 Mes lutteurs"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.athletes
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+elif page == "📋 Fiches lutteurs":
+
+    st.title(
+        "📋 Fiches lutteurs"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    render_athlete_sheet(
+        selected,
+        editable=True,
+        show_selection=True,
+    )
+
+
+elif page == "🇫🇷 Suivi sélection":
+
+    st.title(
+        "🇫🇷 Suivi Équipe de France"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    render_selection_module(
+        selected,
+        editable=True,
+    )
+
+
+elif page == "🏆 Compétitions":
+
+    st.title(
+        "🏆 Compétitions"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.competitions
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+elif page == "🧪 Tests physiques":
+
+    st.title(
+        "🧪 Tests physiques"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.tests
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+elif page == "📅 Calendrier":
+
+    st.title(
+        "📅 Calendrier"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.calendar
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================
+# SÉLECTIONNEUR
+# ============================================================
+
+elif page == "🏠 Tableau national":
+
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>🇫🇷 Tableau national</h1>
+            <p>
+            Suivi des collectifs jeunes
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "Lutteurs",
+        len(
+            st.session_state.athletes
+        )
+    )
+
+    c2.metric(
+        "Compétitions",
+        len(
+            st.session_state.competitions
+        )
+    )
+
+    c3.metric(
+        "Évaluations",
+        len(
+            st.session_state.evaluations_selection
+        )
+    )
+
+    c4.metric(
+        "Projets",
+        len(
+            st.session_state.projets_performance
+        )
+    )
+
+    st.subheader(
+        "👥 Collectif national"
+    )
+
+    df = pd.DataFrame(
+        st.session_state.athletes
+    )
+
+    st.dataframe(
+        df[
+            [
+                "Prénom",
+                "Nom",
+                "Style",
+                "Club",
+                "Catégorie",
+                "Collectif",
+                "Objectif",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================
+# SÉLECTION EDF
+# ============================================================
+
+elif page == "🇫🇷 Sélection Équipe de France":
+
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>🇫🇷 Sélection Équipe de France</h1>
+            <p>
+            Suivi des éléments d'évaluation des collectifs
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.info(
+        "Cette interface permet aux référents de consulter "
+        "les résultats, les stages, la stabilité de catégorie, "
+        "la progression et les évaluations."
+    )
+
+    selected_style = st.selectbox(
+        "Style",
+        [
+            "Tous",
+            "Lutte libre",
+            "Lutte gréco-romaine",
+            "Lutte féminine",
+        ],
+    )
+
+    selected_age = st.selectbox(
+        "Collectif / âge",
+        [
+            "Tous",
+            "France U15",
+            "France U17",
+            "France U20",
+        ],
+    )
+
+    filtered = []
+
+    for athlete in st.session_state.athletes:
+
+        if (
+            selected_style != "Tous"
+            and athlete["Style"]
+            != selected_style
+        ):
+            continue
+
+        if (
+            selected_age != "Tous"
+            and athlete["Collectif"]
+            != selected_age
+        ):
+            continue
+
+        filtered.append(
+            athlete
+        )
+
+    if filtered:
+
+        for athlete_data in filtered:
+
+            name = (
+                f"{athlete_data['Prénom']} "
+                f"{athlete_data['Nom']}"
+            )
+
+            summary = competition_summary(
+                name
+            )
+
+            evaluations = [
+                x
+                for x in
+                st.session_state
+                .evaluations_selection
+                if x["Athlète"] == name
+            ]
+
+            with st.expander(
+                f"🤼 {name} — "
+                f"{athlete_data['Catégorie poids']}"
+            ):
+
+                c1, c2, c3, c4 = st.columns(4)
+
+                c1.metric(
+                    "TNR",
+                    summary["tnr"]
+                )
+
+                c2.metric(
+                    "France",
+                    summary["france"]
+                )
+
+                c3.metric(
+                    "International",
+                    summary["international"]
+                )
+
+                c4.metric(
+                    "Évaluations",
+                    len(evaluations)
+                )
+
+                if st.button(
+                    "📋 Ouvrir la fiche",
+                    key=f"open_{name}",
+                ):
+
+                    st.session_state[
+                        "selected_athlete"
+                    ] = name
+
+                    st.session_state[
+                        "force_selection_page"
+                    ] = True
+
+                    st.rerun()
+
+
+# ============================================================
+# COLLECTIFS
+# ============================================================
+
+elif page == "👥 Collectifs":
+
+    st.title(
+        "👥 Collectifs"
+    )
+
+    df = pd.DataFrame(
+        st.session_state.athletes
+    )
+
+    for collective in df[
+        "Collectif"
+    ].unique():
+
+        st.subheader(
+            collective
+        )
+
+        st.dataframe(
+            df[
+                df["Collectif"]
+                == collective
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
+# ============================================================
+# FICHES STAFF
+# ============================================================
+
+elif page == "📋 Fiches lutteurs":
+
+    st.title(
+        "📋 Fiches individuelles"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    render_athlete_sheet(
+        selected,
+        editable=True,
+        show_selection=True,
+    )
+
+
+# ============================================================
+# ÉVALUATIONS RÉFÉRENTS
+# ============================================================
+
+elif page == "👁️ Évaluations référents":
+
+    st.title(
+        "👁️ Évaluations des référents"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    render_selection_module(
+        selected,
+        editable=True,
+    )
+
+
+# ============================================================
+# PROJETS PERFORMANCE
+# ============================================================
+
+elif page == "🎯 Projets de performance":
+
+    st.title(
+        "🎯 Projets de performance individuels"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    projects = [
+        x
+        for x in
+        st.session_state
+        .projets_performance
+        if x["Athlète"] == selected
+    ]
+
+    if projects:
+
+        for project in projects:
+
+            st.markdown(
+                f"""
+                <div class="section-card">
+
+                <b>Date :</b> {project['Date']}<br><br>
+
+                <b>Objectif principal :</b><br>
+                {project['Objectif principal']}<br><br>
+
+                <b>Objectifs intermédiaires :</b><br>
+                {project['Objectifs intermédiaires']}<br><br>
+
+                <b>Objectif technique :</b><br>
+                {project['Objectif technique']}<br><br>
+
+                <b>Objectif physique :</b><br>
+                {project['Objectif physique']}<br><br>
+
+                <b>Objectif tactique :</b><br>
+                {project['Objectif tactique']}<br><br>
+
+                <b>Compétitions prioritaires :</b><br>
+                {project['Compétitions prioritaires']}<br><br>
+
+                <b>Engagement du lutteur :</b><br>
+                {project['Engagement lutteur']}<br><br>
+
+                <b>Bilan :</b><br>
+                {project['Bilan']}
+
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    else:
+
+        st.info(
+            "Aucun projet enregistré."
+        )
+
+
+# ============================================================
+# PLANNING NATIONAL
+# ============================================================
+
+elif page == "📅 Planning national":
+
+    st.title(
+        "📅 Planning national"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.calendar
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================
+# STAGES
+# ============================================================
+
+elif page == "🏕️ Stages":
+
+    st.title(
+        "🏕️ Stages"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.stages
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================
+# ADMINISTRATION
+# ============================================================
+
+elif page == "🏠 Administration":
+
+    st.markdown(
+        """
+        <div class="hero">
+            <h1>⚙️ Administration</h1>
+            <p>
+            Administration de la plateforme
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "Lutteurs",
+        len(
+            st.session_state.athletes
+        )
+    )
+
+    c2.metric(
+        "Compétitions",
+        len(
+            st.session_state.competitions
+        )
+    )
+
+    c3.metric(
+        "Évaluations",
+        len(
+            st.session_state.evaluations_selection
+        )
+    )
+
+    c4.metric(
+        "Projets",
+        len(
+            st.session_state.projets_performance
+        )
+    )
+
+
+elif page == "👥 Lutteurs":
+
+    st.title(
+        "👥 Tous les lutteurs"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.athletes
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+elif page == "📋 Fiches":
+
+    st.title(
+        "📋 Fiches récapitulatives"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    render_athlete_sheet(
+        selected,
+        editable=True,
+        show_selection=True,
+    )
+
+
+elif page == "🇫🇷 Sélection Équipe de France":
+
+    st.title(
+        "🇫🇷 Sélection Équipe de France"
+    )
+
+    selected = st.selectbox(
+        "Lutteur",
+        athlete_names(),
+    )
+
+    render_selection_module(
+        selected,
+        editable=True,
+    )
+
+
+elif page == "📊 Statistiques":
+
+    st.title(
+        "📊 Statistiques"
+    )
+
+    df = pd.DataFrame(
+        st.session_state.competitions
+    )
+
+    if not df.empty:
+
+        total_matches = df[
+            "Combats"
+        ].sum()
+
+        total_wins = df[
+            "Victoires"
+        ].sum()
+
+        total_losses = df[
+            "Défaites"
+        ].sum()
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "Combats",
+            int(total_matches)
+        )
+
+        c2.metric(
+            "Victoires",
+            int(total_wins)
+        )
+
+        c3.metric(
+            "Défaites",
+            int(total_losses)
+        )
+
+        chart_data = pd.DataFrame(
+            {
+                "Résultat": [
+                    "Victoires",
+                    "Défaites",
+                ],
+                "Nombre": [
+                    total_wins,
+                    total_losses,
+                ],
+            }
+        )
+
+        st.bar_chart(
+            chart_data.set_index(
+                "Résultat"
+            )
+        )
+
+
+elif page == "📅 Planning":
+
+    st.title(
+        "📅 Planning global"
+    )
+
+    st.dataframe(
+        pd.DataFrame(
+            st.session_state.calendar
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.sidebar.divider()
+
+st.sidebar.caption(
+    "France Lutte Jeunes — V4"
+)
+
+st.sidebar.caption(
+    "Athlete Management System spécialisé lutte"
+)
+
+st.sidebar.caption(
+    "Prototype — données en session"
+)
