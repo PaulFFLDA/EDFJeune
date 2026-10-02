@@ -1,24 +1,51 @@
 # 🇫🇷 France Lutte Jeunes
 
-Prototype Streamlit pour le suivi des jeunes lutteurs :
-- profils lutteurs / entraîneurs / sélectionneurs / administration
-- compétitions et résultats
-- stages
-- planification nationale
-- préparation physique
-- tests physiques
-- tableaux de bord
-- calendrier personnel du lutteur
-- bilan rapide de compétition (matchs, victoires, défaites, résultat, ressenti, commentaire)
-- suivi de progression des tests physiques avec courbes
-- courbe d'évolution du poids
+Application Streamlit de suivi des jeunes lutteurs français.
 
-## Lancer localement
+## Fonctionnalités
+
+### Lutteur / Lutteuse
+
+- Tableau de bord individuel
+- Fiche récapitulative
+- Calendrier personnel
+- Compte-rendu rapide des compétitions
+- Nombre de combats
+- Victoires / défaites
+- Classement
+- Bilan de compétition
+- Suivi du poids
+- Courbe de poids
+- Tests physiques
+- Évolution des tests
+
+### Entraîneur / Club
+
+- Liste des lutteurs
+- Fiches individuelles
+- Suivi des compétitions
+- Tests physiques
+- Calendrier
+
+### Sélectionneur / Staff
+
+- Vue nationale
+- Collectifs
+- Fiches individuelles
+- Planning national
+- Stages
+- Compétitions
+- Tests physiques
+
+### Administration
+
+- Vue globale
+- Liste des lutteurs
+- Fiches
+- Statistiques
+- Planning
+
+## Installation locale
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
-```
-
-> Cette version utilise des données de démonstration stockées dans `st.session_state`.
-> Pour une utilisation réelle, il faudra connecter une base de données persistante et mettre en place une authentification.
