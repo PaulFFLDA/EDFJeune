@@ -1,286 +1,236 @@
 import io
-import html
 import zipfile
-import urllib.request
-from datetime import date, datetime
-
 import pandas as pd
 import streamlit as st
-
-# Import optionnel sécurisé
-try:
-    from streamlit_sortables import sort_items
-except ImportError:
-    sort_items = None
-
+from PIL import Image
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    Image as RLImage,
-    HRFlowable,
-)
-from reportlab.lib.units import mm
 
-# ============================================================
-# CONFIGURATION ET STYLE
-# ============================================================
-
+# ---------------------------------------------------------
+# 1. CONFIGURATION DE LA PAGE STREAMLIT
+# ---------------------------------------------------------
 st.set_page_config(
-    page_title="France Lutte Jeunes",
+    page_title="AMS France Lutte",
     page_icon="🤼",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-st.markdown(
-    """
-    <style>
-    .main { background-color: #f6f8fb; }
-    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; }
-    .hero {
-        padding: 1.6rem 2rem;
-        border-radius: 18px;
-        background: linear-gradient(135deg, #172033, #263957);
-        color: white;
-        margin-bottom: 1.5rem;
-    }
-    .hero h1 { margin-bottom: 0.3rem; }
-    .hero p { opacity: 0.85; margin-bottom: 0; }
-    div[data-testid="stMetric"] {
-        background: white;
-        border: 1px solid #e6eaf0;
-        padding: 1rem;
-        border-radius: 14px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ============================================================
-# IDENTITÉ VISUELLE FFLDA
-# ============================================================
-
-FFLDA_LOGO_SOURCE_URL = "https://www.fflutte.com/content/uploads/2021/10/3-1-1024x576.jpg"
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def get_fflda_logo_bytes():
-    """Télécharge et recadre le logo officiel pour l'application/PDF."""
-    try:
-        from PIL import Image
-        req = urllib.request.Request(
-            FFLDA_LOGO_SOURCE_URL, 
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as response:
-            raw = response.read()
-        image = Image.open(io.BytesIO(raw)).convert("RGB")
-        width, height = image.size
-        crop = image.crop((0, 0, width // 2, height // 2))
-        out = io.BytesIO()
-        crop.save(out, format="PNG", optimize=True)
-        return out.getvalue()
-    except Exception:
-        return None
-
-# ============================================================
-# INITIALIZATION DU SESSION STATE
-# ============================================================
-
-if "athletes" not in st.session_state:
-    st.session_state.athletes = [
-        {
-            "Nom": "Martin", "Prénom": "Lucas", "Club": "Club de Caen", "Style": "Lutte libre",
-            "Catégorie": "U17 - 65 kg", "Catégorie poids": "65 kg", "Date de naissance": "2009-04-12",
-            "Collectif": "France U17", "Entraîneur": "Thomas Dupont", "Objectif": "Championnats d'Europe U17"
-        },
-        {
-            "Nom": "Durand", "Prénom": "Hugo", "Club": "Lutte Dijon", "Style": "Lutte libre",
-            "Catégorie": "U20 - 74 kg", "Catégorie poids": "74 kg", "Date de naissance": "2007-08-21",
-            "Collectif": "France U20", "Entraîneur": "Pierre Bernard", "Objectif": "Sélection internationale"
-        }
-    ]
-
-if "competitions" not in st.session_state:
-    st.session_state.competitions = [
-        {"Athlète": "Lucas Martin", "Date": "2026-09-12", "Compétition": "TNR Paris", "Catégorie": "65 kg"},
-        {"Athlète": "Lucas Martin", "Date": "2026-09-20", "Compétition": "Championnat de France", "Catégorie": "65 kg"},
-        {"Athlète": "Hugo Durand", "Date": "2026-09-20", "Compétition": "TNR Paris", "Catégorie": "74 kg"}
-    ]
-
-if "selection_proposals" not in st.session_state:
-    st.session_state.selection_proposals = []
+# Initialisation du st.session_state
+if "proposals" not in st.session_state:
+    st.session_state.proposals = {}
 
 if "convocations" not in st.session_state:
     st.session_state.convocations = []
 
-if "selection_criteria" not in st.session_state:
-    st.session_state.selection_criteria = [
-        "Résultats sportifs",
-        "Évaluation technique / référent",
-        "État de forme et préparation",
-        "Adéquation catégorie / poids",
-        "Engagement et assiduité",
-        "Disponibilité pour la compétition",
+# Données d'exemple (Athlètes et Compétitions)
+ATHLETES_DATA = [
+    {"Nom": "GADIROV Said", "Catégorie poids": "74 kg", "Club": "Paris Lutte", "Statut": "Titulaire"},
+    {"Nom": "LUKASZEWSKI Adam", "Catégorie poids": "86 kg", "Club": "Lyon Wrestling", "Statut": "Remplaçant"},
+    {"Nom": "MOUSTAPHA Kouyaté", "Catégorie poids": "97 kg", "Club": "Nice Lutte", "Statut": "Titulaire"},
+]
+
+COMPETITIONS = [
+    "Championnat d'Europe U23 - Zagreb 2026",
+    "Grand Prix de France - Henri Deglane 2026",
+    "Tournoi de Qualification Olympique 2026"
+]
+
+SELECTION_CRITERIA = [
+    "Test physique validé",
+    "Poids dans la catégorie cible",
+    "Bilan médical conforme",
+    "Règlement intérieur signé"
+]
+
+# ---------------------------------------------------------
+# 2. LOGIQUE MÉTIER & FONCTIONS UTILITAIRES
+# ---------------------------------------------------------
+def create_convocation_pdf(conv_data):
+    """Génère un document PDF de convocation en mémoire."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=30,
+        bottomMargin=30
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    # En-tête
+    title_style = ParagraphStyle(
+        "TitleStyle",
+        parent=styles["Heading1"],
+        fontSize=18,
+        textColor=colors.HexColor("#1E3A8A"),
+        alignment=1,
+        spaceAfter=20
+    )
+    story.append(Paragraph("<b>OFFICIEL — CONVOCATION EQUIPE DE FRANCE</b>", title_style))
+    story.append(Spacer(1, 15))
+
+    # Tableau des détails
+    data = [
+        ["Compétition :", conv_data.get("Compétition", "")],
+        ["Athlète :", conv_data.get("Athlète", "")],
+        ["Catégorie :", conv_data.get("Catégorie", "")],
+        ["Statut :", conv_data.get("Statut", "")],
+        ["Manager / Référent :", conv_data.get("Manager", "")],
+        ["Remarques :", conv_data.get("Notes", "Aucune remarque spécifique.")],
     ]
 
-# ============================================================
-# FONCTIONS UTILITAIRES
-# ============================================================
+    t = Table(data, colWidths=[150, 350])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#F3F4F6")),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+    ]))
+    
+    story.append(t)
+    doc.build(story)
+    return buffer.getvalue()
 
-def athlete_names():
-    return [f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip() for a in st.session_state.athletes]
 
-def get_athlete(full_name):
-    for a in st.session_state.athletes:
-        if f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip() == full_name:
-            return a
-    return None
+def generate_all_convocations_zip(competition_name):
+    """Génère une archive ZIP contenant tous les PDF des convocations pour une compétition."""
+    zip_buffer = io.BytesIO()
+    convocations = [c for c in st.session_state.convocations if c.get("Compétition") == competition_name]
 
-def competition_names():
-    return sorted(set(
-        str(x.get("Compétition", "")).strip()
-        for x in st.session_state.competitions
-        if str(x.get("Compétition", "")).strip()
-    ))
+    if not convocations:
+        return None
 
-def get_proposals_for_competition(competition):
-    return [x for x in st.session_state.selection_proposals if x.get("Compétition") == competition]
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for conv in convocations:
+            pdf_data = create_convocation_pdf(conv)
+            filename = f"Convocation_{conv.get('Athlète', 'Lutteur').replace(' ', '_')}.pdf"
+            zip_file.writestr(filename, pdf_data)
 
-def get_proposal(competition, athlete_name):
-    for x in st.session_state.selection_proposals:
-        if x.get("Compétition") == competition and x.get("Athlète") == athlete_name:
-            return x
-    return None
+    return zip_buffer.getvalue()
 
-def get_convocation(competition, athlete_name):
-    for x in st.session_state.convocations:
-        if x.get("Compétition") == competition and x.get("Athlète") == athlete_name:
-            return x
-    return None
 
-def upsert_proposal(competition, athlete_name, proposer, category, criteria_ok, criteria_notes=""):
-    existing = get_proposal(competition, athlete_name)
-    payload = {
-        "Proposée par": proposer,
-        "Catégorie": category,
-        "Critères": criteria_ok,
-        "Observations critères": criteria_notes,
-        "Date proposition": str(date.today()),
-        "Statut": "Éligible — à valider" if all(criteria_ok.values()) else "Non conforme aux critères",
-    }
-    if existing:
-        existing.update(payload)
-    else:
-        st.session_state.selection_proposals.append({
-            "Compétition": competition,
-            "Athlète": athlete_name,
-            **payload,
-            "Décision": "", "Commission": "", "Date décision": "", "Motif": ""
-        })
-
-def create_direct_convocation(competition, athlete_name, manager="Manager / Sélectionneur"):
-    existing = get_convocation(competition, athlete_name)
-    athlete = get_athlete(athlete_name) or {}
-    category = athlete.get("Catégorie poids", athlete.get("Catégorie", ""))
-
-    if existing:
-        existing["Catégorie"] = category
-        existing["Signature manager"] = manager
-        return existing
-
-    convocation = {
+def upsert_proposal(comp, athlete_name, manager, category, checks, notes):
+    """Enregistre ou met à jour une étude de sélection."""
+    key = f"{comp}___{athlete_name}"
+    st.session_state.proposals[key] = {
+        "Compétition": comp,
         "Athlète": athlete_name,
-        "Compétition": competition,
+        "Manager": manager,
         "Catégorie": category,
-        "Statut": "Brouillon",
-        "Date création": str(date.today()),
-        "Signature manager": manager,
+        "Critères": checks,
+        "Notes": notes,
+        "Statut": "En étude"
     }
-    st.session_state.convocations.append(convocation)
-    return convocation
 
-# ============================================================
-# RENDU DU MODULE SÉLECTION & CONVOCATIONS
-# ============================================================
 
-def render_convocations_module(mode="manager"):
-    is_manager = mode == "manager"
-    st.markdown("""
-    <div class="hero">
-        <h1>📨 Sélection & convocations</h1>
-        <p>Le manager choisit les lutteurs selon les critères applicables, valide la sélection puis édite les convocations PDF.</p>
-    </div>
-    """, unsafe_allow_html=True)
+def validate_proposal(comp, athlete_name, status, manager, notes):
+    """Valide ou refuse un athlète et génère la convocation si validé."""
+    key = f"{comp}___{athlete_name}"
+    if key in st.session_state.proposals:
+        st.session_state.proposals[key]["Statut"] = status
 
-    logo = get_fflda_logo_bytes()
-    if logo:
-        st.image(logo, width=190)
+    # Mise à jour ou ajout dans la liste globale des convocations
+    st.session_state.convocations = [
+        c for c in st.session_state.convocations
+        if not (c["Compétition"] == comp and c["Athlète"] == athlete_name)
+    ]
 
-    competitions = competition_names()
-    if not competitions:
-        st.warning("Aucune compétition enregistrée.")
-        return
+    st.session_state.convocations.append({
+        "Compétition": comp,
+        "Athlète": athlete_name,
+        "Statut": status,
+        "Manager": manager,
+        "Notes": notes,
+        "Catégorie": "Sélectionné"
+    })
 
-    selected_comp = st.selectbox("Compétition", competitions, key=f"convocation_competition_{mode}")
+# ---------------------------------------------------------
+# 3. INTERFACE UTILISATEUR STREAMLIT
+# ---------------------------------------------------------
+st.title("🤼 AMS France Lutte — Sélection & Convocations")
 
-    proposals = get_proposals_for_competition(selected_comp)
-    validated = [x for x in proposals if x.get("Statut") == "Validé"]
-    pending = [x for x in proposals if x.get("Statut") == "Éligible — à valider"]
-    rejected = [x for x in proposals if x.get("Statut") in ("Refusé", "Non conforme aux critères")]
+selected_comp = st.selectbox("🎯 Sélectionner une compétition :", COMPETITIONS)
+manager_name = st.text_input("👤 Nom du Référent / Manager :", value="Entraîneur National")
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Lutteurs étudiés", len(proposals))
-    c2.metric("À valider", len(pending))
-    c3.metric("Validés", len(validated))
-    c4.metric("Non retenus", len(rejected))
+st.divider()
 
-    if is_manager:
-        st.subheader("1️⃣ Choisir les lutteurs à convoquer")
-        names = athlete_names()
-        selected_athletes = st.multiselect(
-            "Lutteurs candidats",
-            names,
-            default=[x["Athlète"] for x in proposals],
-            help="Le manager peut sélectionner plusieurs lutteurs puis vérifier les critères individuellement.",
-        )
-        manager_name = st.text_input("Nom du manager", value="Manager / Sélectionneur", key="manager_name")
+st.subheader("1️⃣ Étude des candidatures")
 
-        for idx, name in enumerate(selected_athletes):
-            athlete = get_athlete(name) or {}
-            existing = get_proposal(selected_comp, name) or {}
-            with st.expander(f"🤼 {name} — {athlete.get('Style', '')} — {athlete.get('Catégorie poids', '')}", expanded=True):
-                criteria = existing.get("Critères", {})
-                checks = {}
-                cols = st.columns(2)
-                for cidx, criterion in enumerate(st.session_state.selection_criteria):
-                    default = bool(criteria.get(criterion, False))
-                    with cols[cidx % 2]:
-                        checks[criterion] = st.checkbox(criterion, value=default, key=f"crit_{selected_comp}_{name}_{cidx}")
-                notes = st.text_area(
-                    "Observations du manager",
-                    value=existing.get("Observations critères", ""),
-                    key=f"criteria_notes_{idx}_{name}",
+for idx, athlete in enumerate(ATHLETES_DATA):
+    name = athlete["Nom"]
+    with st.expander(f"🤼 {name} ({athlete['Catégorie poids']}) — {athlete['Club']}"):
+        
+        checks = {}
+        st.write("**Critères de sélection :**")
+        for crit in SELECTION_CRITERIA:
+            checks[crit] = st.checkbox(crit, key=f"chk_{selected_comp}_{name}_{crit}")
+
+        notes = st.text_area(f"Remarques / Notes pour {name} :", key=f"notes_{selected_comp}_{name}")
+
+        col_save, col_v1, col_v2 = st.columns([2, 1, 1])
+
+        with col_save:
+            if st.button("💾 Enregistrer l'étude", key=f"save_{idx}_{name}"):
+                upsert_proposal(
+                    selected_comp,
+                    name,
+                    manager_name,
+                    athlete.get("Catégorie poids", ""),
+                    checks,
+                    notes
                 )
-                if st.button("💾 Enregistrer l'étude de ce lutteur", key=f"save_candidate_{idx}_{name}"):
-                    upsert_proposal(
-                        selected_comp,
-                        name,
-                        manager_name,
-                        athlete.get("Catégorie poids", athlete.get("Catégorie", "")),
-                        checks,
-                        notes,
-                    )
-                    st.success(f"Étude enregistrée pour {name}.")
-                    st.rerun()
+                st.success(f"Étude enregistrée pour {name}.")
+                st.rerun()
 
-# Lancement de l'application
-if __name__ == "__main__":
-    render_convocations_module(mode="manager")
+        with col_v1:
+            if st.button("✅ Valider", key=f"val_{idx}_{name}"):
+                validate_proposal(selected_comp, name, "Validé", manager_name, notes)
+                st.success(f"{name} validé !")
+                st.rerun()
+
+        with col_v2:
+            if st.button("❌ Refuser", key=f"ref_{idx}_{name}"):
+                validate_proposal(selected_comp, name, "Refusé", manager_name, notes)
+                st.warning(f"{name} refusé.")
+                st.rerun()
+
+# ---------------------------------------------------------
+# 4. RÉCAPITULATIF & TÉLÉCHARGEMENT DES CONVOCATIONS
+# ---------------------------------------------------------
+st.divider()
+st.subheader("2️⃣ Convocations générées")
+
+comp_convocations = [c for c in st.session_state.convocations if c.get("Compétition") == selected_comp]
+
+if not comp_convocations:
+    st.info("Aucune convocation validée pour le moment pour cette compétition.")
+else:
+    # Exportation ZIP global
+    zip_data = generate_all_convocations_zip(selected_comp)
+    if zip_data:
+        st.download_button(
+            label="📦 Télécharger TOUTES les convocations de cette compétition (.ZIP)",
+            data=zip_data,
+            file_name=f"Convocations_{selected_comp.replace(' ', '_')}.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
+        st.write("")
+
+    # Téléchargement individuel
+    for conv in comp_convocations:
+        with st.expander(f"📄 Convocation PDF — {conv.get('Athlète')} ({conv.get('Statut')})"):
+            pdf_bytes = create_convocation_pdf(conv)
+            st.download_button(
+                label=f"📥 Télécharger la convocation de {conv.get('Athlète')} (PDF)",
+                data=pdf_bytes,
+                file_name=f"Convocation_{conv.get('Athlète').replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                key=f"dl_pdf_{conv.get('Athlète')}_{selected_comp}"
+            )
