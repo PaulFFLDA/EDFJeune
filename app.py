@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, datetime
+import io
+import zipfile
+import html
 
 # ============================================================
 # CONFIGURATION
@@ -362,9 +365,344 @@ if "stages" not in st.session_state:
         }
     ]
 
+
+# ============================================================
+# CONVOCATIONS / COMMISSION DE SÉLECTION
+# ============================================================
+
+if "selection_proposals" not in st.session_state:
+    st.session_state.selection_proposals = []
+
+if "selection_commissions" not in st.session_state:
+    st.session_state.selection_commissions = []
+
+if "convocations" not in st.session_state:
+    st.session_state.convocations = []
+
+
 # ============================================================
 # FONCTIONS
 # ============================================================
+
+
+def competition_names():
+    return sorted(set(
+        str(x.get("Compétition", "")).strip()
+        for x in st.session_state.competitions
+        if str(x.get("Compétition", "")).strip()
+    ))
+
+
+def get_proposals_for_competition(competition):
+    return [
+        x for x in st.session_state.selection_proposals
+        if x.get("Compétition") == competition
+    ]
+
+
+def get_proposal(competition, athlete_name):
+    for x in st.session_state.selection_proposals:
+        if x.get("Compétition") == competition and x.get("Athlète") == athlete_name:
+            return x
+    return None
+
+
+def get_convocation(competition, athlete_name):
+    for x in st.session_state.convocations:
+        if x.get("Compétition") == competition and x.get("Athlète") == athlete_name:
+            return x
+    return None
+
+
+def convocation_status(competition, athlete_name):
+    c = get_convocation(competition, athlete_name)
+    return c.get("Statut", "Non créée") if c else "Non créée"
+
+
+def upsert_proposal(competition, athlete_name, proposer, category, note=""):
+    existing = get_proposal(competition, athlete_name)
+    if existing:
+        existing.update({
+            "Proposée par": proposer,
+            "Catégorie": category,
+            "Note": note,
+            "Statut": "À valider",
+            "Date proposition": str(date.today()),
+        })
+    else:
+        st.session_state.selection_proposals.append({
+            "Compétition": competition,
+            "Athlète": athlete_name,
+            "Catégorie": category,
+            "Proposée par": proposer,
+            "Date proposition": str(date.today()),
+            "Statut": "À valider",
+            "Décision": "",
+            "Commission": "",
+            "Date décision": "",
+            "Motif": "",
+            "Note": note,
+        })
+
+
+def validate_proposal(competition, athlete_name, decision, commission, motif=""):
+    proposal = get_proposal(competition, athlete_name)
+    if not proposal:
+        return
+    proposal["Statut"] = decision
+    proposal["Décision"] = decision
+    proposal["Commission"] = commission
+    proposal["Date décision"] = str(date.today())
+    proposal["Motif"] = motif
+
+    # A validated selection automatically creates/updates its convocation.
+    if decision == "Validé":
+        athlete = get_athlete(athlete_name)
+        existing = get_convocation(competition, athlete_name)
+        if existing:
+            existing.update({
+                "Catégorie": proposal.get("Catégorie", athlete.get("Catégorie poids", "")),
+                "Statut": existing.get("Statut", "Brouillon"),
+            })
+        else:
+            st.session_state.convocations.append({
+                "Athlète": athlete_name,
+                "Compétition": competition,
+                "Catégorie": proposal.get("Catégorie", athlete.get("Catégorie poids", "")),
+                "Statut": "Brouillon",
+                "Date création": str(date.today()),
+                "Date envoi": "",
+                "Réponse": "",
+                "Date réponse": "",
+                "Motif réponse": "",
+                "Lieu": "",
+                "Date début": "",
+                "Date fin": "",
+                "Heure rendez-vous": "",
+                "Lieu rendez-vous": "",
+                "Transport": "",
+                "Hébergement": "",
+                "Accompagnateur": "",
+                "Informations": "",
+            })
+
+
+def render_convocation_document(convocation):
+    athlete = get_athlete(convocation["Athlète"]) or {}
+    def esc(v):
+        return html.escape(str(v or ""))
+    return f"""
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body {{ font-family: Arial, sans-serif; margin: 45px; color:#172033; }}
+        h1 {{ font-size: 28px; margin-bottom: 6px; }}
+        h2 {{ color:#263957; margin-top: 28px; }}
+        .header {{ border-bottom: 3px solid #263957; padding-bottom: 15px; }}
+        .box {{ background:#f6f8fb; border:1px solid #e6eaf0; border-radius:10px; padding:15px; margin:12px 0; }}
+        .label {{ font-weight:bold; }}
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>CONVOCATION</h1>
+        <div>France Lutte Jeunes — Athlete Management System</div>
+      </div>
+      <h2>Athlète</h2>
+      <div class="box">
+        <div><span class="label">Nom :</span> {esc(athlete.get("Prénom",""))} {esc(athlete.get("Nom",""))}</div>
+        <div><span class="label">Club :</span> {esc(athlete.get("Club",""))}</div>
+        <div><span class="label">Style :</span> {esc(athlete.get("Style",""))}</div>
+        <div><span class="label">Catégorie :</span> {esc(convocation.get("Catégorie",""))}</div>
+      </div>
+      <h2>Compétition</h2>
+      <div class="box">
+        <div><span class="label">Compétition :</span> {esc(convocation.get("Compétition",""))}</div>
+        <div><span class="label">Lieu :</span> {esc(convocation.get("Lieu",""))}</div>
+        <div><span class="label">Du :</span> {esc(convocation.get("Date début",""))}
+             <span class="label"> au :</span> {esc(convocation.get("Date fin",""))}</div>
+        <div><span class="label">Rendez-vous :</span> {esc(convocation.get("Heure rendez-vous",""))}
+             — {esc(convocation.get("Lieu rendez-vous",""))}</div>
+      </div>
+      <h2>Organisation</h2>
+      <div class="box">
+        <div><span class="label">Transport :</span> {esc(convocation.get("Transport",""))}</div>
+        <div><span class="label">Hébergement :</span> {esc(convocation.get("Hébergement",""))}</div>
+        <div><span class="label">Accompagnateur :</span> {esc(convocation.get("Accompagnateur",""))}</div>
+      </div>
+      <h2>Informations pratiques</h2>
+      <div class="box">{esc(convocation.get("Informations",""))}</div>
+      <p style="margin-top:40px;">Cette convocation fait suite à la validation de la commission de sélection.</p>
+    </body>
+    </html>
+    """
+
+
+def render_convocations_module(mode="selection"):
+    st.markdown("""
+    <div class="hero">
+      <h1>📨 Convocations & commission de sélection</h1>
+      <p>Proposition des athlètes, validation par la commission et publipostage des convocations.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    competitions = competition_names()
+    if not competitions:
+        st.warning("Aucune compétition enregistrée.")
+        return
+
+    selected_comp = st.selectbox("Compétition", competitions, key="convocation_competition")
+
+    proposals = get_proposals_for_competition(selected_comp)
+    validated = [x for x in proposals if x.get("Statut") == "Validé"]
+    pending = [x for x in proposals if x.get("Statut") == "À valider"]
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Propositions", len(proposals))
+    c2.metric("À valider", len(pending))
+    c3.metric("Validés", len(validated))
+
+    if mode in ("selection", "admin"):
+        st.subheader("1️⃣ Proposer des athlètes")
+        with st.form("selection_proposal_form"):
+            selected_athletes = st.multiselect(
+                "Athlètes à proposer",
+                athlete_names(),
+                default=[x["Athlète"] for x in proposals],
+            )
+            proposer = st.text_input("Proposé par", value="Sélectionneur / Référent")
+            note = st.text_area("Note générale")
+            submit = st.form_submit_button("📋 Enregistrer les propositions", type="primary")
+            if submit:
+                for name in selected_athletes:
+                    athlete = get_athlete(name) or {}
+                    upsert_proposal(
+                        selected_comp,
+                        name,
+                        proposer,
+                        athlete.get("Catégorie poids", athlete.get("Catégorie", "")),
+                        note,
+                    )
+                st.success("Propositions enregistrées et placées « À valider ».")
+                st.rerun()
+
+        st.subheader("2️⃣ Commission de sélection")
+        if proposals:
+            for idx, proposal in enumerate(proposals):
+                athlete = proposal["Athlète"]
+                with st.expander(f"{athlete} — {proposal.get('Statut','À valider')}"):
+                    st.write(f"**Catégorie :** {proposal.get('Catégorie','')}")
+                    st.write(f"**Proposé par :** {proposal.get('Proposée par','')}")
+                    st.write(f"**Note :** {proposal.get('Note','') or '—'}")
+                    if proposal.get("Statut") != "Validé":
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            commission = st.text_input(
+                                "Commission / séance",
+                                key=f"commission_{idx}",
+                                value=proposal.get("Commission", ""),
+                            )
+                            motif = st.text_area(
+                                "Motif / observation",
+                                key=f"motif_{idx}",
+                            )
+                        with col2:
+                            if st.button("✅ Valider", key=f"validate_{idx}", use_container_width=True):
+                                validate_proposal(selected_comp, athlete, "Validé", commission, motif)
+                                st.success(f"{athlete} est validé(e).")
+                                st.rerun()
+                            if st.button("❌ Refuser", key=f"reject_{idx}", use_container_width=True):
+                                validate_proposal(selected_comp, athlete, "Refusé", commission, motif)
+                                st.warning(f"{athlete} est refusé(e).")
+                                st.rerun()
+        else:
+            st.info("Aucune proposition pour cette compétition.")
+
+    st.subheader("3️⃣ Convocations")
+    comp_convocations = [
+        x for x in st.session_state.convocations
+        if x.get("Compétition") == selected_comp
+    ]
+
+    if mode in ("selection", "admin") and validated:
+        st.info("Les athlètes validés disposent automatiquement d'une convocation brouillon à compléter.")
+
+    if comp_convocations:
+        for idx, conv in enumerate(comp_convocations):
+            with st.expander(f"{conv['Athlète']} — {conv.get('Statut','Brouillon')}"):
+                with st.form(f"conv_form_{idx}"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        conv["Lieu"] = st.text_input("Lieu", value=conv.get("Lieu",""), key=f"lieu_{idx}")
+                        conv["Date début"] = st.text_input("Date début", value=conv.get("Date début",""), key=f"debut_{idx}")
+                        conv["Date fin"] = st.text_input("Date fin", value=conv.get("Date fin",""), key=f"fin_{idx}")
+                        conv["Heure rendez-vous"] = st.text_input("Heure de rendez-vous", value=conv.get("Heure rendez-vous",""), key=f"heure_{idx}")
+                        conv["Lieu rendez-vous"] = st.text_input("Lieu de rendez-vous", value=conv.get("Lieu rendez-vous",""), key=f"rdv_{idx}")
+                    with c2:
+                        conv["Transport"] = st.text_input("Transport", value=conv.get("Transport",""), key=f"transport_{idx}")
+                        conv["Hébergement"] = st.text_input("Hébergement", value=conv.get("Hébergement",""), key=f"hotel_{idx}")
+                        conv["Accompagnateur"] = st.text_input("Accompagnateur", value=conv.get("Accompagnateur",""), key=f"accomp_{idx}")
+                        conv["Informations"] = st.text_area("Informations pratiques", value=conv.get("Informations",""), key=f"infos_{idx}")
+                    if st.form_submit_button("💾 Enregistrer la convocation", type="primary"):
+                        st.success("Convocation enregistrée.")
+                        st.rerun()
+
+                if conv.get("Statut") == "Brouillon":
+                    if st.button("📤 Marquer comme envoyée", key=f"send_{idx}"):
+                        conv["Statut"] = "Envoyée"
+                        conv["Date envoi"] = str(date.today())
+                        st.success("Convocation marquée comme envoyée.")
+                        st.rerun()
+
+                document = render_convocation_document(conv)
+                st.download_button(
+                    "📄 Télécharger la convocation (HTML)",
+                    data=document.encode("utf-8"),
+                    file_name=f"convocation_{conv['Athlète'].replace(' ','_')}.html",
+                    mime="text/html",
+                    key=f"download_{idx}",
+                )
+    else:
+        st.info("Aucune convocation créée. Elle apparaît automatiquement après validation par la commission.")
+
+    # Publipostage groupé
+    ready = [x for x in comp_convocations if x.get("Statut") in ("Brouillon", "Envoyée")]
+    if ready and mode in ("selection", "admin"):
+        st.subheader("4️⃣ Publipostage")
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for conv in ready:
+                filename = f"convocation_{conv['Athlète'].replace(' ','_')}.html"
+                zf.writestr(filename, render_convocation_document(conv))
+        st.download_button(
+            "📦 Générer toutes les convocations",
+            data=zip_buffer.getvalue(),
+            file_name=f"convocations_{selected_comp.replace(' ','_')}.zip",
+            mime="application/zip",
+            type="primary",
+        )
+        st.caption("Le publipostage génère un document personnalisé par athlète. L'envoi e-mail peut ensuite être branché sur SMTP ou un service mail.")
+
+    if mode == "athlete":
+        mine = [x for x in comp_convocations if x.get("Athlète") == st.session_state.get("athlete")]
+        if not mine:
+            st.info("Aucune convocation pour votre profil.")
+        else:
+            for conv in mine:
+                st.info(f"Statut : {conv.get('Statut','')}")
+                if conv.get("Statut") == "Envoyée":
+                    if st.button("✅ J'accepte la convocation", key=f"accept_{conv['Compétition']}_{conv['Athlète']}"):
+                        conv["Réponse"] = "Acceptée"
+                        conv["Date réponse"] = str(date.today())
+                        st.success("Votre réponse a été enregistrée.")
+                        st.rerun()
+                    if st.button("❌ Je refuse la convocation", key=f"decline_{conv['Compétition']}_{conv['Athlète']}"):
+                        conv["Réponse"] = "Refusée"
+                        conv["Date réponse"] = str(date.today())
+                        st.success("Votre réponse a été enregistrée.")
+                        st.rerun()
+
 
 def athlete_names():
     return [
@@ -1664,6 +2002,7 @@ if role == "Lutteur / Lutteuse":
             "🇫🇷 Mon suivi Équipe de France",
             "📅 Mon calendrier",
             "🏆 Mes compétitions",
+            "📨 Mes convocations",
             "⚖️ Mon poids",
             "🧪 Mes tests",
         ],
@@ -1683,6 +2022,7 @@ elif role == "Entraîneur / Club":
             "📋 Fiches lutteurs",
             "🇫🇷 Suivi sélection",
             "🏆 Compétitions",
+            "📨 Convocations",
             "🧪 Tests physiques",
             "📅 Calendrier",
         ],
@@ -1706,6 +2046,7 @@ elif role == "Sélectionneur / Référent":
             "📅 Planning national",
             "🏕️ Stages",
             "🏆 Compétitions",
+            "📨 Convocations & commission",
             "🧪 Tests physiques",
         ],
     )
@@ -1725,6 +2066,7 @@ else:
             "🇫🇷 Sélection Équipe de France",
             "📊 Statistiques",
             "📅 Planning",
+            "📨 Convocations & commission",
         ],
     )
 
@@ -2859,3 +3201,16 @@ st.sidebar.caption(
 st.sidebar.caption(
     "Prototype — données en session"
 )
+
+# ============================================================
+# NOUVEAUX MODULES : CONVOCATIONS
+# ============================================================
+
+if page == "📨 Convocations & commission":
+    render_convocations_module("selection" if role == "Sélectionneur / Référent" else "admin")
+
+elif page == "📨 Convocations":
+    render_convocations_module("selection")
+
+elif page == "📨 Mes convocations":
+    render_convocations_module("athlete")
