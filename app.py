@@ -527,6 +527,48 @@ def validate_proposal(competition, athlete_name, decision, manager, motif=""):
             })
 
 
+def create_direct_convocation(competition, athlete_name, manager="Manager / Sélectionneur"):
+    """Crée une convocation directement depuis une compétition, sans passer par la proposition de sélection."""
+    existing = get_convocation(competition, athlete_name)
+    athlete = get_athlete(athlete_name) or {}
+    competition_rows = [
+        x for x in st.session_state.competitions
+        if x.get("Compétition") == competition and x.get("Athlète") == athlete_name
+    ]
+    source = competition_rows[0] if competition_rows else {}
+    category = source.get("Catégorie", "") or athlete.get("Catégorie poids", "") or athlete.get("Catégorie", "")
+
+    if existing:
+        existing["Catégorie"] = category
+        existing["Signature manager"] = manager
+        return existing
+
+    convocation = {
+        "Athlète": athlete_name,
+        "Compétition": competition,
+        "Catégorie": category,
+        "Statut": "Brouillon",
+        "Date création": str(date.today()),
+        "Date envoi": "",
+        "Réponse": "",
+        "Date réponse": "",
+        "Motif réponse": "",
+        "Lieu": "",
+        "Date début": source.get("Date", ""),
+        "Date fin": source.get("Date", ""),
+        "Heure rendez-vous": "",
+        "Lieu rendez-vous": "",
+        "Transport": "",
+        "Hébergement": "",
+        "Accompagnateur": "",
+        "Informations": "",
+        "Signature manager": manager,
+        "Origine": "Création directe depuis une compétition",
+    }
+    st.session_state.convocations.append(convocation)
+    return convocation
+
+
 def create_convocation_pdf(convocation):
     """Produit un PDF A4 officiel avec logo et données personnalisées."""
     buffer = io.BytesIO()
@@ -2185,6 +2227,7 @@ elif role == "Manager / Sélectionneur":
         [
             "🏠 Tableau de bord",
             "🎯 Sélection & critères",
+            "🗂️ Base & cercles de performance",
             "📨 Convocations & commission",
             "🏆 Compétitions",
             "📋 Fiches lutteurs",
@@ -2225,6 +2268,7 @@ else:
         [
             "🏠 Administration",
             "👥 Lutteurs",
+            "🗂️ Base & cercles de performance",
             "📋 Fiches",
             "🇫🇷 Sélection Équipe de France",
             "📊 Statistiques",
@@ -2764,6 +2808,69 @@ elif page == "🏆 Compétitions":
         use_container_width=True,
         hide_index=True,
     )
+
+    # Création directe d'une convocation depuis une compétition.
+    # Disponible au manager et à l'administrateur ; le circuit de validation
+    # par critères reste disponible dans « Sélection & critères ».
+    if role in ("Manager / Sélectionneur", "Administration"):
+        st.divider()
+        st.subheader("📨 Créer une convocation directement depuis la compétition")
+        st.caption(
+            "Ce raccourci permet de créer immédiatement un brouillon de convocation. "
+            "La convocation pourra ensuite être complétée, téléchargée en PDF et envoyée. "
+            "La validation des critères reste disponible dans le module de sélection."
+        )
+
+        direct_competition = st.selectbox(
+            "Compétition concernée",
+            competition_names(),
+            key="direct_convocation_competition",
+        )
+        direct_athletes = st.multiselect(
+            "Lutteurs à convoquer",
+            athlete_names(),
+            key="direct_convocation_athletes",
+            help="Tu peux sélectionner plusieurs lutteurs pour générer plusieurs convocations d'un coup.",
+        )
+        direct_manager = st.text_input(
+            "Responsable de la convocation",
+            value="Manager / Sélectionneur",
+            key="direct_convocation_manager",
+        )
+
+        if st.button(
+            "📨 Créer les convocations",
+            type="primary",
+            disabled=not direct_athletes,
+            key="create_direct_convocations",
+        ):
+            created = []
+            for athlete_name in direct_athletes:
+                conv = create_direct_convocation(direct_competition, athlete_name, direct_manager)
+                created.append(conv["Athlète"])
+            st.session_state.direct_convocation_competition_result = direct_competition
+            st.success(f"{len(created)} convocation(s) créée(s) en brouillon : {', '.join(created)}")
+
+        direct_created = [
+            x for x in st.session_state.convocations
+            if x.get("Compétition") == direct_competition
+        ]
+        if direct_created:
+            st.markdown("### 📄 Convocations de cette compétition")
+            for idx, conv in enumerate(direct_created):
+                c1, c2, c3 = st.columns([3, 2, 2])
+                c1.write(f"**{conv.get('Athlète', '')}** — {conv.get('Statut', 'Brouillon')}")
+                if c2.button("✏️ Ouvrir / modifier", key=f"direct_edit_{idx}"):
+                    st.session_state["convocation_competition_preselect"] = direct_competition
+                    st.session_state["page"] = "📨 Convocations & commission"
+                    st.rerun()
+                c3.download_button(
+                    "📄 PDF",
+                    data=create_convocation_pdf(conv),
+                    file_name=f"convocation_{conv['Athlète'].replace(' ', '_')}.pdf",
+                    mime="application/pdf",
+                    key=f"direct_pdf_{idx}",
+                )
 
 
 elif page == "🧪 Tests physiques":
@@ -3389,3 +3496,378 @@ elif page == "📨 Convocations":
 
 elif page == "📨 Mes convocations":
     render_convocations_module("athlete")
+
+
+
+# ============================================================
+# BASE ATHLETES, COLLECTIFS ET CERCLES DE PERFORMANCE
+# ============================================================
+
+if page == "🗂️ Base & cercles de performance":
+    if role not in ("Administration", "Manager / Sélectionneur"):
+        st.error("Accès réservé à l'administration et au manager.")
+        st.stop()
+
+    st.markdown("""
+    <div class="hero">
+      <h1>🗂️ Base athlètes & cercles de performance</h1>
+      <p>Gestion des fiches, des collectifs et du suivi individualisé des lutteurs.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Champs ajoutés sans écraser les données existantes.
+    for athlete in st.session_state.athletes:
+        athlete.setdefault("Collectifs", athlete.get("Collectif", ""))
+        athlete.setdefault("Cercle performance", "À évaluer")
+        athlete.setdefault("Statut sportif", "Actif")
+        athlete.setdefault("Région", "")
+        athlete.setdefault("Licence", "")
+        athlete.setdefault("Objectif saison", athlete.get("Objectif", ""))
+        athlete.setdefault("Commentaire performance", "")
+
+    CIRCLES = [
+        "Cercle haute performance",
+        "Cellule performance",
+        "Sélectionnable / potentiel",
+        "Relève / développement",
+        "Suivi territorial",
+        "À évaluer",
+    ]
+
+    tab_base, tab_collectifs, tab_cercles, tab_import = st.tabs([
+        "👥 Base des lutteurs",
+        "🔄 Collectifs",
+        "🏅 Cercles de performance",
+        "📥 Import / export",
+    ])
+
+    with tab_base:
+        st.subheader("Effectif")
+        f1, f2, f3 = st.columns(3)
+        query = f1.text_input("Rechercher un lutteur", key="base_search").strip().lower()
+        style_filter = f2.selectbox(
+            "Style",
+            ["Tous"] + sorted({str(a.get("Style", "")) for a in st.session_state.athletes if a.get("Style")}),
+            key="base_style_filter",
+        )
+        status_filter = f3.selectbox(
+            "Statut",
+            ["Tous", "Actif", "En pause", "Sorti"],
+            key="base_status_filter",
+        )
+
+        filtered = []
+        for a in st.session_state.athletes:
+            full_name = f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip()
+            searchable = " ".join([
+                full_name, str(a.get("Club", "")), str(a.get("Collectif", "")),
+                str(a.get("Collectifs", "")), str(a.get("Catégorie", "")),
+                str(a.get("Catégorie poids", "")), str(a.get("Région", "")),
+            ]).lower()
+            if query and query not in searchable:
+                continue
+            if style_filter != "Tous" and a.get("Style", "") != style_filter:
+                continue
+            if status_filter != "Tous" and a.get("Statut sportif", "Actif") != status_filter:
+                continue
+            filtered.append(a)
+
+        st.metric("Lutteurs correspondant aux filtres", len(filtered))
+        if filtered:
+            display_columns = [
+                "Prénom", "Nom", "Club", "Style", "Catégorie", "Catégorie poids",
+                "Collectif", "Cercle performance", "Statut sportif", "Région"
+            ]
+            st.dataframe(
+                pd.DataFrame([{k: a.get(k, "") for k in display_columns} for a in filtered]),
+                use_container_width=True, hide_index=True
+            )
+
+        st.divider()
+        st.subheader("➕ Ajouter un lutteur")
+        with st.form("add_athlete_extended", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            prenom = c1.text_input("Prénom *")
+            nom = c2.text_input("Nom *")
+            club = c3.text_input("Club")
+            c4, c5, c6 = st.columns(3)
+            style = c4.selectbox("Style de lutte", ["Lutte libre", "Lutte gréco-romaine", "Lutte féminine"])
+            categorie = c5.text_input("Catégorie d'âge")
+            poids = c6.text_input("Catégorie de poids")
+            c7, c8, c9 = st.columns(3)
+            collectif = c7.text_input("Collectif principal")
+            cercle = c8.selectbox("Cercle de performance", CIRCLES, index=len(CIRCLES)-1)
+            region = c9.text_input("Région")
+            c10, c11 = st.columns(2)
+            coach = c10.text_input("Entraîneur")
+            objectif = c11.text_input("Objectif sportif")
+            add = st.form_submit_button("Ajouter le lutteur", type="primary")
+            if add:
+                if not prenom.strip() or not nom.strip():
+                    st.error("Le prénom et le nom sont obligatoires.")
+                elif any(
+                    a.get("Prénom", "").strip().casefold() == prenom.strip().casefold()
+                    and a.get("Nom", "").strip().casefold() == nom.strip().casefold()
+                    for a in st.session_state.athletes
+                ):
+                    st.error("Un lutteur portant ce prénom et ce nom existe déjà.")
+                else:
+                    st.session_state.athletes.append({
+                        "Prénom": prenom.strip(), "Nom": nom.strip(), "Club": club.strip(),
+                        "Style": style, "Catégorie": categorie.strip(), "Catégorie poids": poids.strip(),
+                        "Date de naissance": "", "Collectif": collectif.strip(), "Collectifs": collectif.strip(),
+                        "Entraîneur": coach.strip(), "Objectif": objectif.strip(),
+                        "Objectif saison": objectif.strip(), "Points forts": "", "Axes progression": "",
+                        "Observation": "", "Cercle performance": cercle, "Statut sportif": "Actif",
+                        "Région": region.strip(), "Licence": "", "Commentaire performance": "",
+                    })
+                    st.success(f"{prenom.strip()} {nom.strip()} a été ajouté.")
+                    st.rerun()
+
+        st.divider()
+        st.subheader("✏️ Modifier ou retirer un lutteur")
+        athlete_labels = [
+            f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip()
+            for a in st.session_state.athletes
+        ]
+        if athlete_labels:
+            chosen = st.selectbox("Lutteur à modifier", athlete_labels, key="edit_athlete_extended")
+            selected = next(
+                a for a in st.session_state.athletes
+                if f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip() == chosen
+            )
+            with st.form("edit_athlete_extended_form"):
+                c1, c2, c3 = st.columns(3)
+                new_club = c1.text_input("Club", value=selected.get("Club", ""))
+                new_collectif = c2.text_input("Collectif principal", value=selected.get("Collectif", ""))
+                current_circle = selected.get("Cercle performance", "À évaluer")
+                new_circle = c3.selectbox(
+                    "Cercle de performance", CIRCLES,
+                    index=CIRCLES.index(current_circle) if current_circle in CIRCLES else len(CIRCLES)-1
+                )
+                c4, c5, c6 = st.columns(3)
+                new_category = c4.text_input("Catégorie", value=selected.get("Catégorie", ""))
+                new_weight = c5.text_input("Catégorie de poids", value=selected.get("Catégorie poids", ""))
+                new_region = c6.text_input("Région", value=selected.get("Région", ""))
+                c7, c8 = st.columns(2)
+                new_coach = c7.text_input("Entraîneur", value=selected.get("Entraîneur", ""))
+                new_status = c8.selectbox(
+                    "Statut sportif", ["Actif", "En pause", "Sorti"],
+                    index=["Actif", "En pause", "Sorti"].index(
+                        selected.get("Statut sportif", "Actif")
+                        if selected.get("Statut sportif", "Actif") in ["Actif", "En pause", "Sorti"]
+                        else "Actif"
+                    )
+                )
+                new_objective = st.text_input(
+                    "Objectif saison", value=selected.get("Objectif saison", selected.get("Objectif", ""))
+                )
+                new_notes = st.text_area(
+                    "Commentaire performance", value=selected.get("Commentaire performance", "")
+                )
+                save = st.form_submit_button("Enregistrer les modifications", type="primary")
+                if save:
+                    selected.update({
+                        "Club": new_club.strip(), "Collectif": new_collectif.strip(),
+                        "Collectifs": new_collectif.strip(), "Cercle performance": new_circle,
+                        "Catégorie": new_category.strip(), "Catégorie poids": new_weight.strip(),
+                        "Région": new_region.strip(), "Entraîneur": new_coach.strip(),
+                        "Statut sportif": new_status, "Objectif saison": new_objective.strip(),
+                        "Objectif": new_objective.strip(), "Commentaire performance": new_notes.strip(),
+                    })
+                    st.success("Fiche mise à jour.")
+                    st.rerun()
+
+            with st.expander("⚠️ Retirer un lutteur de la base"):
+                st.warning("Cette action supprime aussi ses données liées (résultats, poids, tests, évaluations, projets et calendrier).")
+                confirm = st.checkbox(f"Je confirme le retrait de {chosen}", key="confirm_delete_athlete")
+                if st.button("Retirer définitivement ce lutteur", type="secondary", disabled=not confirm):
+                    st.session_state.athletes = [
+                        a for a in st.session_state.athletes
+                        if f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip() != chosen
+                    ]
+                    for key in [
+                        "competitions", "weight_log", "tests", "calendar",
+                        "evaluations_selection", "projets_performance"
+                    ]:
+                        if key in st.session_state:
+                            st.session_state[key] = [
+                                row for row in st.session_state[key]
+                                if row.get("Athlète") != chosen
+                            ]
+                    st.session_state.selection_proposals = [
+                        row for row in st.session_state.selection_proposals if row.get("Athlète") != chosen
+                    ]
+                    st.session_state.convocations = [
+                        row for row in st.session_state.convocations if row.get("Athlète") != chosen
+                    ]
+                    st.success(f"{chosen} a été retiré de la base.")
+                    st.rerun()
+
+    with tab_collectifs:
+        st.subheader("Affecter ou retirer un lutteur d'un collectif")
+        st.caption("Un changement d'affectation met à jour le collectif principal de la fiche.")
+        athlete_labels = [
+            f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip()
+            for a in st.session_state.athletes
+        ]
+        collective_names = sorted({
+            str(a.get("Collectif", "")).strip()
+            for a in st.session_state.athletes if str(a.get("Collectif", "")).strip()
+        })
+        collective_names += [x for x in ["France U15", "France U17", "France U20", "France Senior", "Groupe relève", "Groupe détection"] if x not in collective_names]
+        if athlete_labels:
+            selected_names = st.multiselect("Lutteurs concernés", athlete_labels, key="collective_bulk_names")
+            target_collective = st.selectbox("Collectif cible", collective_names + ["Créer un nouveau collectif"], key="collective_target")
+            custom_collective = ""
+            if target_collective == "Créer un nouveau collectif":
+                custom_collective = st.text_input("Nom du nouveau collectif", key="new_collective_name")
+            effective_collective = custom_collective.strip() if target_collective == "Créer un nouveau collectif" else target_collective
+            ca, cb = st.columns(2)
+            if ca.button("➕ Ajouter / affecter au collectif", disabled=not selected_names):
+                if not effective_collective:
+                    st.error("Indique un nom de collectif.")
+                else:
+                    for a in st.session_state.athletes:
+                        name = f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip()
+                        if name in selected_names:
+                            memberships = [x.strip() for x in str(a.get("Collectifs", a.get("Collectif", ""))).split(";") if x.strip()]
+                            if effective_collective not in memberships:
+                                memberships.append(effective_collective)
+                            a["Collectifs"] = "; ".join(memberships)
+                            if not a.get("Collectif"):
+                                a["Collectif"] = effective_collective
+                    st.success(f"{len(selected_names)} affectation(s) ajoutée(s) au collectif.")
+                    st.rerun()
+            if cb.button("➖ Retirer du collectif sélectionné", disabled=not selected_names):
+                for a in st.session_state.athletes:
+                    name = f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip()
+                    if name in selected_names:
+                        memberships = [x.strip() for x in str(a.get("Collectifs", a.get("Collectif", ""))).split(";") if x.strip()]
+                        memberships = [x for x in memberships if x != effective_collective]
+                        a["Collectifs"] = "; ".join(memberships)
+                        if a.get("Collectif") == effective_collective:
+                            a["Collectif"] = memberships[0] if memberships else ""
+                st.success("Retrait effectué pour le collectif sélectionné.")
+                st.rerun()
+
+        st.divider()
+        st.subheader("Composition actuelle des collectifs")
+        by_collective = {}
+        for a in st.session_state.athletes:
+            memberships = [x.strip() for x in str(a.get("Collectifs", a.get("Collectif", ""))).split(";") if x.strip()]
+            if not memberships:
+                memberships = ["Sans collectif"]
+            for group in memberships:
+                by_collective.setdefault(group, []).append(a)
+        for group, members in sorted(by_collective.items()):
+            with st.expander(f"{group} — {len(members)} lutteur(s)"):
+                st.dataframe(pd.DataFrame([{
+                    "Lutteur": f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip(),
+                    "Club": a.get("Club", ""), "Catégorie": a.get("Catégorie", ""),
+                    "Poids": a.get("Catégorie poids", ""), "Cercle": a.get("Cercle performance", "À évaluer")
+                } for a in members]), use_container_width=True, hide_index=True)
+
+    with tab_cercles:
+        st.subheader("Répartition des cercles")
+        st.caption("Ces cercles sont une proposition de suivi interne. Ils ne valent pas inscription officielle sur une liste ministérielle ou attribution d'une aide ANS.")
+        counts = {circle: 0 for circle in CIRCLES}
+        for a in st.session_state.athletes:
+            circle = a.get("Cercle performance", "À évaluer")
+            counts[circle] = counts.get(circle, 0) + 1
+        cols = st.columns(3)
+        for i, circle in enumerate(CIRCLES):
+            cols[i % 3].metric(circle, counts.get(circle, 0))
+        for circle in CIRCLES:
+            members = [a for a in st.session_state.athletes if a.get("Cercle performance", "À évaluer") == circle]
+            if members:
+                with st.expander(f"{circle} — {len(members)}"):
+                    st.dataframe(pd.DataFrame([{
+                        "Lutteur": f"{a.get('Prénom', '')} {a.get('Nom', '')}".strip(),
+                        "Club": a.get("Club", ""), "Collectif": a.get("Collectif", ""),
+                        "Style": a.get("Style", ""), "Catégorie": a.get("Catégorie", ""),
+                        "Objectif": a.get("Objectif saison", a.get("Objectif", "")),
+                    } for a in members]), use_container_width=True, hide_index=True)
+
+    with tab_import:
+        st.subheader("Importer une base existante")
+        st.write("Importe un fichier CSV ou Excel avec au minimum les colonnes **Prénom** et **Nom**. Les colonnes reconnues sont ajoutées aux fiches.")
+        st.caption("Colonnes utiles : Prénom, Nom, Club, Style, Catégorie, Catégorie poids, Collectif, Entraîneur, Région, Licence, Cercle performance, Statut sportif, Objectif.")
+        uploaded = st.file_uploader("Choisir un fichier CSV ou Excel", type=["csv", "xlsx"], key="athlete_bulk_upload")
+        import_mode = st.radio("Mode d'import", ["Ajouter les nouveaux lutteurs", "Mettre à jour les fiches existantes et ajouter les nouveaux"], horizontal=True)
+        if uploaded is not None:
+            try:
+                if uploaded.name.lower().endswith(".csv"):
+                    imported_df = pd.read_csv(uploaded, dtype=str).fillna("")
+                else:
+                    imported_df = pd.read_excel(uploaded, dtype=str).fillna("")
+                st.dataframe(imported_df.head(10), use_container_width=True, hide_index=True)
+                if st.button("Importer les lignes", type="primary", key="confirm_athlete_import"):
+                    if not {"Prénom", "Nom"}.issubset(set(imported_df.columns)):
+                        st.error("Le fichier doit contenir les colonnes 'Prénom' et 'Nom'.")
+                    else:
+                        existing_map = {
+                            (a.get("Prénom", "").strip().casefold(), a.get("Nom", "").strip().casefold()): a
+                            for a in st.session_state.athletes
+                        }
+                        added = updated = skipped = 0
+                        allowed = {
+                            "Prénom", "Nom", "Club", "Style", "Catégorie", "Catégorie poids",
+                            "Date de naissance", "Collectif", "Entraîneur", "Objectif", "Points forts",
+                            "Axes progression", "Observation", "Région", "Licence", "Cercle performance",
+                            "Statut sportif", "Objectif saison", "Commentaire performance"
+                        }
+                        for _, row in imported_df.iterrows():
+                            first = str(row.get("Prénom", "")).strip()
+                            last = str(row.get("Nom", "")).strip()
+                            if not first or not last:
+                                skipped += 1
+                                continue
+                            key = (first.casefold(), last.casefold())
+                            payload = {k: str(row.get(k, "")).strip() for k in allowed if k in imported_df.columns}
+                            payload.setdefault("Collectif", "")
+                            payload.setdefault("Style", "")
+                            payload.setdefault("Catégorie", "")
+                            payload.setdefault("Catégorie poids", "")
+                            payload.setdefault("Objectif", "")
+                            payload.setdefault("Date de naissance", "")
+                            payload.setdefault("Points forts", "")
+                            payload.setdefault("Axes progression", "")
+                            payload.setdefault("Observation", "")
+                            payload.setdefault("Entraîneur", "")
+                            payload.setdefault("Club", "")
+                            payload["Collectifs"] = payload.get("Collectif", "")
+                            payload.setdefault("Cercle performance", "À évaluer")
+                            payload.setdefault("Statut sportif", "Actif")
+                            if key in existing_map:
+                                if import_mode.startswith("Mettre à jour"):
+                                    existing_map[key].update(payload)
+                                    updated += 1
+                                else:
+                                    skipped += 1
+                            else:
+                                st.session_state.athletes.append(payload)
+                                existing_map[key] = payload
+                                added += 1
+                        st.success(f"Import terminé : {added} ajouté(s), {updated} mis à jour, {skipped} ignoré(s).")
+                        st.rerun()
+            except Exception as exc:
+                st.error(f"Impossible de lire ce fichier : {exc}")
+
+        st.divider()
+        st.subheader("Exporter la base")
+        export_df = pd.DataFrame(st.session_state.athletes)
+        st.download_button(
+            "⬇️ Télécharger la base des lutteurs (CSV)",
+            data=export_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="base_lutteurs.csv",
+            mime="text/csv",
+            type="primary",
+        )
+
+    st.info(
+        "Important : cette version conserve encore les modifications dans la session Streamlit. "
+        "Pour une base durable et partagée entre plusieurs utilisateurs, il faudra connecter une base persistante "
+        "(par exemple PostgreSQL/Supabase) ; le fichier local seul n'est pas une garantie de conservation sur Streamlit Cloud."
+    )
+
