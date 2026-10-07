@@ -2,3 +2,4 @@ streamlit
 pandas
 reportlab
 Pillow
+streamlit-sortables==0.3.1
