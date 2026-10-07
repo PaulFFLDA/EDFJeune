@@ -6,6 +6,11 @@ import zipfile
 import html
 import urllib.request
 
+try:
+    from streamlit_sortables import sort_items
+except ImportError:
+    sort_items = None
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -692,6 +697,86 @@ def create_convocation_pdf(convocation):
     return buffer.getvalue()
 
 
+
+def render_drag_drop_convocations(selected_comp, manager_name="Manager / Sélectionneur"):
+    """Interface drag-and-drop pour affecter les lutteurs aux convocations."""
+    st.subheader("🖱️ Glisser-déposer des lutteurs")
+    st.caption("Fais glisser un lutteur depuis « Lutteurs disponibles » vers une compétition. Le déplacement crée ou met à jour automatiquement sa convocation.")
+
+    if sort_items is None:
+        st.warning("Le module de glisser-déposer n'est pas installé. Ajoute `streamlit-sortables` dans requirements.txt puis redéploie l'application.")
+        return
+
+    all_competitions = competition_names()
+    containers = [{"header": "🤼 Lutteurs disponibles", "items": []}]
+    for comp in all_competitions:
+        containers.append({"header": f"📨 {comp}", "items": []})
+
+    # Un lutteur déjà affecté à une compétition apparaît dans cette compétition.
+    assigned = {}
+    for conv in st.session_state.convocations:
+        comp = conv.get("Compétition")
+        athlete = conv.get("Athlète")
+        if comp in all_competitions and athlete:
+            assigned[athlete] = comp
+
+    available = []
+    for name in athlete_names():
+        if name not in assigned:
+            available.append(name)
+
+    containers[0]["items"] = available
+    for idx, comp in enumerate(all_competitions, start=1):
+        containers[idx]["items"] = [name for name, assigned_comp in assigned.items() if assigned_comp == comp]
+
+    custom_style = """
+    .sortable-component { border: 0 !important; background: transparent !important; font-family: inherit; }
+    .sortable-container { border: 1px solid #dfe5ed; border-radius: 14px; background: #f7f9fc; min-height: 150px; }
+    .sortable-container-header { font-weight: 700; padding: 12px; background: #172033; color: white; border-radius: 12px 12px 0 0; }
+    .sortable-container-body { padding: 8px; min-height: 100px; }
+    .sortable-item { border-radius: 10px; margin: 6px 0; padding: 10px; background: white; border: 1px solid #dfe5ed; color: #172033; font-weight: 600; cursor: grab; }
+    .sortable-item:hover { background: #eef4ff; }
+    """
+
+    result = sort_items(containers, multi_containers=True, custom_style=custom_style, key=f"drag_convocations_{selected_comp}")
+    if not result:
+        return
+
+    # Détecter la destination de chaque lutteur après le déplacement.
+    destination = {}
+    for container in result:
+        header = str(container.get("header", ""))
+        items = container.get("items", []) or []
+        if header == "🤼 Lutteurs disponibles":
+            for name in items:
+                destination[name] = None
+        elif header.startswith("📨 "):
+            comp = header[2:].strip()
+            for name in items:
+                destination[name] = comp
+
+    changed = False
+    for name in athlete_names():
+        old_comp = assigned.get(name)
+        new_comp = destination.get(name)
+        if old_comp == new_comp:
+            continue
+        if new_comp:
+            create_direct_convocation(new_comp, name, manager_name)
+            changed = True
+        elif old_comp:
+            # Retour vers « disponibles » : suppression de la convocation uniquement si elle
+            # est encore un brouillon créé par le drag-and-drop/direct.
+            st.session_state.convocations = [
+                c for c in st.session_state.convocations
+                if not (c.get("Athlète") == name and c.get("Compétition") == old_comp and c.get("Statut") == "Brouillon")
+            ]
+            changed = True
+
+    if changed:
+        st.success("Convocations mises à jour à partir du glisser-déposer.")
+        st.rerun()
+
 def render_convocations_module(mode="manager"):
     is_manager = mode == "manager"
     st.markdown("""
@@ -711,6 +796,11 @@ def render_convocations_module(mode="manager"):
         return
 
     selected_comp = st.selectbox("Compétition", competitions, key=f"convocation_competition_{mode}")
+
+    if is_manager:
+        manager_name_drag = st.text_input("Responsable des convocations", value="Manager / Sélectionneur", key="drag_manager_name")
+        render_drag_drop_convocations(selected_comp, manager_name_drag)
+        st.divider()
 
     # Configuration des critères : ils sont volontairement configurables car le fichier source
     # ne contient pas une liste officielle détaillée de critères par compétition.
